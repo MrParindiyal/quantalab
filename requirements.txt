@@ -1,7 +1,9 @@
-streamlit
-yfinance
-pandas
+black
+fastapi
 numpy
+pandas
 plotly
 scikit-learn
-black
+streamlit
+uvicorn
+yfinance

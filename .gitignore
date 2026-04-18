@@ -1,6 +1,8 @@
 .venv/
 *.pyc
 __pycache__/
+*.ipynb
+todo.*
 
 # Frontend (Vite/React)
 logs

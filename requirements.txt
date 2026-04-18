@@ -3,7 +3,10 @@ fastapi
 numpy
 pandas
 plotly
+pyjwt
+pwdlib[argon2]
 scikit-learn
+SQLAlchemy
 streamlit
 uvicorn
 yfinance

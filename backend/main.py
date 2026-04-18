@@ -1,15 +1,20 @@
-import yfinance as yf
-import pandas as pd
+from contextlib import asynccontextmanager
+from database import engine
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import models
 import uvicorn
-from contextlib import asynccontextmanager
+import yfinance as yf
+# import pandas as pd
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup actions
     print("FastAPI Backend Started")
+    models.Base.metadata.create_all(bind=engine)
+
     yield
+    
     # Shutdown actions
     print("FastAPI Backend Shutdown")
 

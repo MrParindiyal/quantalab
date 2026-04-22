@@ -3,6 +3,7 @@
 __pycache__/
 *.ipynb
 todo.*
+users.db
 
 # Frontend (Vite/React)
 logs

@@ -27,7 +27,7 @@ class User(Base):
     transactions = relationship("Transaction", back_populates="owner")
 
 
-class Transactions(Base):
+class Transaction(Base):
     __tablename__ = "transactions"
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True)

@@ -1,11 +1,13 @@
 from contextlib import asynccontextmanager
-from database import engine
-from fastapi import FastAPI, HTTPException
+from database import engine, get_db
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-import models
+import models, schemas
+from sqlalchemy.orm import Session
+from utils import hash_password, check_password
 import uvicorn
 import yfinance as yf
-# import pandas as pd
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,6 +30,41 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.post("/register")
+def register_user(user: schemas.UserCreate, db : Session = Depends(get_db)):
+
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    
+    # if user's already registered, raise error
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    new_user = models.User(
+        name = user.username,
+        email = user.email,
+        hashed_password = hash_password(user.password)
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"message": "User created successfully", "user_id": new_user.id}
+
+
+@app.post("/login")
+def login(user_credentials: schemas.UserCreate, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.name == user_credentials.username).first()
+    
+    if not user or not check_password(user_credentials.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    return {
+        "message": "Login successful",
+        "username": user.name,
+        "isAuthenticated": True
+    }
 
 
 @app.get("/api/stock/{symbol}")

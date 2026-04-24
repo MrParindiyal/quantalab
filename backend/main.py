@@ -107,7 +107,7 @@ def login(user_credentials: schemas.UserCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/stock/{symbol}")
-def get_stock_data(symbol: str, period: str = "1mo"):
+def get_stock_data(symbol: str, period: str = "1mo", current_user: models.User = Depends(get_current_user)):
     try:
         # Fetch stock data using yfinance
         stock = yf.Ticker(symbol)
@@ -116,13 +116,14 @@ def get_stock_data(symbol: str, period: str = "1mo"):
         if history.empty:
             raise HTTPException(status_code=404, detail=f"No data found for symbol {symbol}")
             
+        history = history.replace([numpy.inf, -numpy.inf], numpy.nan).ffill()
         # Extract basic metrics
         latest_data = history.iloc[-1]
         prev_data = history.iloc[-2] if len(history) > 1 else latest_data
         
         current_price = float(latest_data["Close"])
         prev_price = float(prev_data["Close"])
-        change_pct = ((current_price - prev_price) / prev_price) * 100
+        change_pct = (((current_price - prev_price) / prev_price) * 100) if prev_price != 0 else 0
         volume = int(latest_data["Volume"])
         
         # Prepare timeseries array for Recharts
@@ -146,6 +147,7 @@ def get_stock_data(symbol: str, period: str = "1mo"):
         }
         
     except Exception as e:
+        print(f"Error fetching stock: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

@@ -135,6 +135,28 @@
   width: 250px;
 }
 
+.market-select, .ticker-select {
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.market-select:focus, .ticker-select:focus {
+  border-color: var(--primary);
+}
+
+.market-select option, .ticker-select option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }

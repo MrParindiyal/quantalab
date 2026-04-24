@@ -7,13 +7,68 @@ import { LogOut, ArrowUpRight, TrendingDown, Search, Loader2 } from 'lucide-reac
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import './Dashboard.css';
 
+const MARKETS = {
+  INDIA: {
+    name: 'India',
+    currency: 'INR',
+    locale: 'en-IN',
+    tickers: {
+      "RELIANCE.NS": "Reliance Industries",
+      "TCS.NS": "Tata Consultancy Services",
+      "INFY.NS": "Infosys",
+      "HDFCBANK.NS": "HDFC Bank",
+      "ICICIBANK.NS": "ICICI Bank",
+      "BHARTIARTL.NS": "Bharti Airtel",
+      "ITC.NS": "ITC",
+      "LT.NS": "Larsen & Toubro",
+      "SBIN.NS": "State Bank of India",
+      "HINDUNILVR.NS": "Hindustan Unilever"
+    }
+  },
+  US: {
+    name: 'US',
+    currency: 'USD',
+    locale: 'en-US',
+    tickers: {
+      "AAPL": "Apple",
+      "MSFT": "Microsoft",
+      "GOOGL": "Alphabet (Google)",
+      "AMZN": "Amazon",
+      "NVDA": "NVIDIA",
+      "META": "Meta",
+      "TSLA": "Tesla",
+      "BRK-B": "Berkshire Hathaway",
+      "LLY": "Eli Lilly",
+      "V": "Visa"
+    }
+  },
+  EU: {
+    name: 'EU',
+    currency: 'EUR',
+    locale: 'en-IE',
+    tickers: {
+      "ASML.AS": "ASML",
+      "NESN.SW": "Nestle",
+      "MC.PA": "LVMH",
+      "SAP.DE": "SAP",
+      "SIE.DE": "Siemens",
+      "NOVN.SW": "Novartis",
+      "AZN.L": "AstraZeneca",
+      "HSBA.L": "HSBC",
+      "SHEL.L": "Shell",
+      "ULVR.L": "Unilever"
+    }
+  }
+};
+
 export function Dashboard() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   
   // Data States
-  const [searchInput, setSearchInput] = useState('AAPL');
-  const [symbol, setSymbol] = useState('AAPL');
+  const [market, setMarket] = useState('INDIA');
+  const [searchInput, setSearchInput] = useState('');
+  const [symbol, setSymbol] = useState('RELIANCE.NS');
   const [period, setPeriod] = useState('1mo');
   const [stockData, setStockData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -34,7 +89,7 @@ export function Dashboard() {
       setUsername(user);
     }
     // Fetch initial data
-    fetchStockData('AAPL', '1mo');
+    fetchStockData('RELIANCE.NS', '1mo');
   }, []);
 
   const handleLogout = () => {
@@ -80,7 +135,13 @@ export function Dashboard() {
   };
 
   // Format currency
-  const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+  const formatCurrency = (val) => {
+    const currentMarket = MARKETS[market];
+    return new Intl.NumberFormat(currentMarket.locale, { 
+      style: 'currency', 
+      currency: currentMarket.currency 
+    }).format(val);
+  };
 
   return (
     <div className="dashboard-container">
@@ -90,16 +151,49 @@ export function Dashboard() {
           <span className="user-badge">Welcome, {username}</span>
         </div>
         <div className="header-controls">
+          <select 
+            value={market} 
+            onChange={(e) => {
+              const newMarket = e.target.value;
+              setMarket(newMarket);
+              const firstTicker = Object.keys(MARKETS[newMarket].tickers)[0];
+              setSymbol(firstTicker);
+              setSearchInput('');
+              fetchStockData(firstTicker, period);
+            }}
+            className="market-select"
+          >
+            <option value="INDIA">India</option>
+            <option value="US">US</option>
+            <option value="EU">EU</option>
+          </select>
+          <select 
+            value={Object.keys(MARKETS[market].tickers).includes(symbol) ? symbol : ''}
+            onChange={(e) => {
+              const newSymbol = e.target.value;
+              if (newSymbol) {
+                setSymbol(newSymbol);
+                setSearchInput('');
+                fetchStockData(newSymbol, period);
+              }
+            }}
+            className="ticker-select"
+          >
+            <option value="" disabled>Select a company</option>
+            {Object.entries(MARKETS[market].tickers).map(([ticker, name]) => (
+              <option key={ticker} value={ticker}>{name} ({ticker})</option>
+            ))}
+          </select>
           <form onSubmit={handleSearch} className="search-form">
             <input 
               type="text"
-              placeholder="Search symbol (e.g. MSFT)" 
+              placeholder="Custom..." 
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="search-input-inline"
             />
             <Button type="submit" disabled={loading} variant="primary">
-              {loading ? <Loader2 size={16} className="spin" /> : <Search size={16} />} Search
+              {loading ? <Loader2 size={16} className="spin" /> : <Search size={16} />}
             </Button>
           </form>
           <Button variant="secondary" onClick={handleLogout}>
@@ -195,7 +289,14 @@ export function Dashboard() {
                       fontSize={12} 
                       tickLine={false} 
                       axisLine={false}
-                      tickFormatter={(val) => '$' + val}
+                      tickFormatter={(val) => {
+                        const currentMarket = MARKETS[market];
+                        return new Intl.NumberFormat(currentMarket.locale, { 
+                          style: 'currency', 
+                          currency: currentMarket.currency,
+                          maximumFractionDigits: 0
+                        }).format(val);
+                      }}
                     />
                     <Tooltip 
                       contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', border: '1px solid var(--border)', borderRadius: '0.5rem', backdropFilter: 'blur(8px)' }}

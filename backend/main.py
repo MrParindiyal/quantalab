@@ -1,13 +1,20 @@
 from contextlib import asynccontextmanager
 from database import engine, get_db
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-import models, schemas
+from fastapi.security import OAuth2PasswordBearer
+import jwt
+import models, numpy, schemas, os
 from sqlalchemy.orm import Session
 from utils import hash_password, check_password
 import uvicorn
 import yfinance as yf
 
+
+SECRET_KEY = str(os.getenv("SECRET_KEY"))
+JWT_SIGNING_ALGO = "HS256" #HMAC SHA 256 symmetric
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,6 +37,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def create_access_token(data):
+    to_encode = data.copy()
+    expire = datetime.now() + timedelta(minutes=10)
+    to_encode.update({"exp" : expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=JWT_SIGNING_ALGO)
+
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail = "Could not validate credentials",
+        headers={"WWW-authenticate": "Bearer"},
+    )
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_SIGNING_ALGO])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    
+    except jwt.PyJWTError:
+        raise credentials_exception
+    
+    user = db.query(models.User).filter(models.User.name == username).first()
+    if user is None:
+        raise credentials_exception
+
+    return user
 
 
 @app.post("/register")
@@ -60,10 +97,12 @@ def login(user_credentials: schemas.UserCreate, db: Session = Depends(get_db)):
     if not user or not check_password(user_credentials.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
+    token = create_access_token(data={"sub" : user.name})
+
     return {
-        "message": "Login successful",
-        "username": user.name,
-        "isAuthenticated": True
+        "access_token": token,
+        "token_type": "bearer",
+        "username": user.name
     }
 
 

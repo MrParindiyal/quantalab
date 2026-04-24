@@ -39,7 +39,7 @@ export function LandingPage() {
 
       if (response.ok) {
         localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('username', data.username);
+        localStorage.setItem('token', data.access_token);
         setSuccessMsg('Welcome back! Entering terminal...');
         setTimeout(() => navigate('/dashboard'), 1200);
       } else {

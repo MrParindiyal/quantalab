@@ -105,8 +105,23 @@ export function Dashboard() {
     setError('');
     
     try {
+      const token = localStorage.getItem('token')
+      
       // Connects to the FastAPI backend!
-      const response = await fetch(`http://localhost:8000/api/stock/${targetSymbol}?period=${targetPeriod}`);
+      const response = await fetch(`http://localhost:8000/api/stock/${targetSymbol}?period=${targetPeriod}`,
+        {
+          headers:{
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.status === 401){
+        localStorage.clear()
+        window.location.href = "/";
+        return;
+      }
+
       if (!response.ok) {
         throw new Error('Failed to fetch data for symbol: ' + targetSymbol);
       }

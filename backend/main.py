@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 import jwt
-import models, numpy, schemas, os
+import models, numpy, os, schemas
 from sqlalchemy.orm import Session
 from utils import hash_password, check_password
 import uvicorn
@@ -149,6 +149,86 @@ def get_stock_data(symbol: str, period: str = "1mo", current_user: models.User =
     except Exception as e:
         print(f"Error fetching stock: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/execute")
+def execute_order(
+    transaction: schemas.TransactionCreate,
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user),
+    ):
+    try:
+        stock = yf.Ticker(transaction.stock_symbol.upper())
+        current_price = float(stock.fast_info['last_price'])
+
+        if not current_price or numpy.isnan(current_price):
+            raise HTTPException(status_code=400, detail="Invalid stock symbol or price unavailable")
+
+        total_cost = current_price * transaction.quantity
+
+        holding = db.query(models.Portfolio).filter(
+            models.Portfolio.user_id == current_user.id, 
+            models.Portfolio.stock_symbol == transaction.stock_symbol.upper()
+            ).first()
+
+        if transaction.transaction_type == "buy" and current_user.balance < total_cost:
+            raise HTTPException(status_code=400, detail="Insufficient funds")
+        elif transaction.transaction_type == "sell" and (holding is None or  holding.quantity < transaction.quantity):
+            raise HTTPException(status_code=400, detail="Insufficient shares")
+
+        new_trxn = models.Transaction(
+            user_id = current_user.id,
+            stock_symbol = transaction.stock_symbol.upper(),
+            transaction_type = transaction.transaction_type,
+            quantity = transaction.quantity,
+            price = round(current_price, 3)
+        )
+
+        db.add(new_trxn)
+
+        current_user.balance += total_cost if transaction.transaction_type == "sell" else -total_cost
+        
+        if transaction.transaction_type == "buy":
+            if holding is None:
+                new_portfolio = models.Portfolio(
+                    user_id = current_user.id,
+                    stock_symbol = transaction.stock_symbol,
+                    quantity = transaction.quantity,
+                    average_price = round(current_price, 3)
+                )
+                db.add(new_portfolio)
+
+            else:
+                holding.average_price = ((holding.average_price * holding.quantity) + total_cost) / (holding.quantity + transaction.quantity)
+                holding.quantity += transaction.quantity
+
+        else:
+            holding.quantity -= transaction.quantity
+            if holding.quantity <= 0:
+                db.delete(holding)
+
+        db.commit()
+        db.refresh(new_trxn)
+
+        return {
+            "status": "success",
+            "executed_price": new_trxn.price,
+            "total_cost": total_cost,
+            "new_balance" : current_user.balance
+        }
+    
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Transaction failed: {str(e)}")
+
+
+@app.get('/api/transactions', response_model=list[schemas.TransactionResponse])
+def get_user_transactions(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return db.query(models.Transaction).filter(models.Transaction.user_id == current_user.id)\
+        .order_by(models.Transaction.timestamp.desc()).all()
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

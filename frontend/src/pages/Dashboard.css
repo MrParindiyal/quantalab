@@ -2,6 +2,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  margin-left: 250px;
 }
 
 .dashboard-header {
@@ -21,10 +22,17 @@
 }
 
 .header-title h2 {
-    background: linear-gradient(90deg, #f8fafc, #94a3b8);
+  background: linear-gradient(90deg, #f8fafc, #94a3b8, #3b82f6, #f8fafc);
+  background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+  animation: shimmer 5s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
 }
 
 .user-badge {
@@ -54,6 +62,13 @@
 
 .metric-card {
   padding: 1.5rem;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px -10px rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .metric-title {
@@ -70,16 +85,29 @@
 }
 
 .metric-change {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.25rem;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 1rem;
+  width: fit-content;
 }
 
-.metric-change.positive { color: var(--success); }
-.metric-change.negative { color: var(--danger); }
-.metric-change.neutral { color: var(--text-muted); }
+.metric-change.positive { 
+  color: var(--success); 
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+.metric-change.negative { 
+  color: var(--danger); 
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+.metric-change.neutral { 
+  color: var(--text-muted);
+}
 
 .chart-section {
   display: flex;
@@ -90,6 +118,12 @@
   min-height: 400px;
   display: flex;
   flex-direction: column;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.chart-card:hover {
+  box-shadow: 0 12px 40px -10px rgba(59, 130, 246, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .chart-header {

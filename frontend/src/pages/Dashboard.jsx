@@ -1,11 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
-import { Input } from '../components/common/Input';
-import { LogOut, ArrowUpRight, TrendingDown, Search, Loader2 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { ArrowUpRight, TrendingDown, Search, Loader2 } from 'lucide-react';
+import { Sidebar } from '../components/Sidebar';
 import './Dashboard.css';
+
+const CandlestickChart = lazy(() => import('../components/charts/CandlestickChart').then(m => ({ default: m.CandlestickChart })));
+const TechnicalIndicators = lazy(() => import('../components/charts/TechnicalIndicators').then(m => ({ default: m.TechnicalIndicators })));
+const PredictionChart = lazy(() => import('../components/charts/PredictionChart').then(m => ({ default: m.PredictionChart })));
+const SimpleLineChart = lazy(() => import('../components/charts/SimpleLineChart').then(m => ({ default: m.SimpleLineChart })));
+const Portfolio = lazy(() => import('../components/Portfolio').then(m => ({ default: m.Portfolio })));
+const Comparison = lazy(() => import('../components/Comparison').then(m => ({ default: m.Comparison })));
+const Transactions = lazy(() => import('../components/Transactions').then(m => ({ default: m.Transactions })));
 
 const MARKETS = {
   INDIA: {
@@ -64,7 +71,10 @@ const MARKETS = {
 export function Dashboard() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
-  
+
+  // Navigation State
+  const [activeTab, setActiveTab] = useState('dashboard');
+
   // Data States
   const [market, setMarket] = useState('INDIA');
   const [searchInput, setSearchInput] = useState('');
@@ -85,47 +95,32 @@ export function Dashboard() {
 
   useEffect(() => {
     const user = localStorage.getItem('username');
-    if (user) {
-      setUsername(user);
-    }
-    // Fetch initial data
+    if (user) setUsername(user);
     fetchStockData('RELIANCE.NS', '1mo');
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('isAuthenticated');
-    localStorage.removeItem('username');
+    localStorage.clear();
     navigate('/');
   };
 
   const fetchStockData = async (targetSymbol, targetPeriod = period) => {
     if (!targetSymbol) return;
-    
     setLoading(true);
     setError('');
-    
-    try {
-      const token = localStorage.getItem('token')
-      
-      // Connects to the FastAPI backend!
-      const response = await fetch(`http://localhost:8000/api/stock/${targetSymbol}?period=${targetPeriod}`,
-        {
-          headers:{
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
 
-      if (response.status === 401){
-        localStorage.clear()
-        window.location.href = "/";
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:8000/api/stock/${targetSymbol}?period=${targetPeriod}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.status === 401) {
+        handleLogout();
         return;
       }
+      if (!response.ok) throw new Error('Failed to fetch data for symbol: ' + targetSymbol);
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch data for symbol: ' + targetSymbol);
-      }
-      
       const data = await response.json();
       setStockData(data);
       setSymbol(data.symbol);
@@ -145,29 +140,23 @@ export function Dashboard() {
     }
   };
 
-  const handlePeriodChange = (newPeriod) => {
-    fetchStockData(symbol, newPeriod);
-  };
-
-  // Format currency
   const formatCurrency = (val) => {
     const currentMarket = MARKETS[market];
-    return new Intl.NumberFormat(currentMarket.locale, { 
-      style: 'currency', 
-      currency: currentMarket.currency 
+    return new Intl.NumberFormat(currentMarket.locale, {
+      style: 'currency',
+      currency: currentMarket.currency
     }).format(val);
   };
 
-  return (
-    <div className="dashboard-container">
-      <header className="dashboard-header">
+  const renderDashboardView = () => (
+    <>
+      <div className="dashboard-header" style={{ marginLeft: 0, borderRadius: '1rem', marginBottom: '1.5rem' }}>
         <div className="header-title">
-          <h2>QuantaLab Dashboard</h2>
-          <span className="user-badge">Welcome, {username}</span>
+          <h2>Market Dashboard</h2>
         </div>
         <div className="header-controls">
-          <select 
-            value={market} 
+          <select
+            value={market}
             onChange={(e) => {
               const newMarket = e.target.value;
               setMarket(newMarket);
@@ -182,7 +171,7 @@ export function Dashboard() {
             <option value="US">US</option>
             <option value="EU">EU</option>
           </select>
-          <select 
+          <select
             value={Object.keys(MARKETS[market].tickers).includes(symbol) ? symbol : ''}
             onChange={(e) => {
               const newSymbol = e.target.value;
@@ -200,9 +189,9 @@ export function Dashboard() {
             ))}
           </select>
           <form onSubmit={handleSearch} className="search-form">
-            <input 
+            <input
               type="text"
-              placeholder="Custom..." 
+              placeholder="Custom Symbol..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="search-input-inline"
@@ -211,124 +200,153 @@ export function Dashboard() {
               {loading ? <Loader2 size={16} className="spin" /> : <Search size={16} />}
             </Button>
           </form>
-          <Button variant="secondary" onClick={handleLogout}>
-            <LogOut size={16} /> Logout
-          </Button>
         </div>
-      </header>
+      </div>
 
-      <main className="dashboard-main">
-        {error && <div className="alert error-alert">{error}</div>}
-        
-        {/* Dynamic Metrics */}
-        <div className="metrics-grid">
-          <Card className="metric-card">
-            <h3 className="metric-title">{symbol} Price</h3>
-            <div className="metric-value">
-              {stockData ? formatCurrency(stockData.metrics.currentPrice) : '---'}
+      {error && <div className="alert error-alert">{error}</div>}
+
+      <div className="metrics-grid">
+        <Card className="metric-card">
+          <h3 className="metric-title">{symbol} Price</h3>
+          <div className="metric-value">
+            {stockData ? formatCurrency(stockData.metrics.currentPrice) : '---'}
+          </div>
+          {stockData && (
+            <div className={`metric-change ${stockData.metrics.changePct >= 0 ? 'positive' : 'negative'}`}>
+              {stockData.metrics.changePct >= 0 ? <ArrowUpRight size={16} /> : <TrendingDown size={16} />}
+              {Math.abs(stockData.metrics.changePct)}%
             </div>
-            {stockData && (
-              <div className={`metric-change ${stockData.metrics.changePct >= 0 ? 'positive' : 'negative'}`}>
-                {stockData.metrics.changePct >= 0 ? <ArrowUpRight size={16} /> : <TrendingDown size={16} />}
-                {Math.abs(stockData.metrics.changePct)}% recent
-              </div>
+          )}
+        </Card>
+        <Card className="metric-card">
+          <h3 className="metric-title">Volume</h3>
+          <div className="metric-value">
+            {stockData?.metrics?.volume ? stockData.metrics.volume.toLocaleString() : '---'}
+          </div>
+          <div className="metric-change neutral">Trading volume</div>
+        </Card>
+        <Card className="metric-card">
+          <h3 className="metric-title">Volatility (Ann.)</h3>
+          <div className="metric-value">
+            {stockData?.metrics.volatility ? `${stockData.metrics.volatility}%` : '---'}
+          </div>
+          <div className="metric-change neutral">Historical risk</div>
+        </Card>
+        <Card className="metric-card">
+          <h3 className="metric-title">Max Drawdown</h3>
+          <div className="metric-value" style={{ color: 'var(--danger)' }}>
+            {stockData?.metrics.maxDrawdown ? `${stockData.metrics.maxDrawdown}%` : '---'}
+          </div>
+          <div className="metric-change neutral">Peak to trough</div>
+        </Card>
+        <Card className="metric-card">
+          <h3 className="metric-title">Sharpe Ratio</h3>
+          <div className="metric-value">
+            {stockData?.metrics.sharpeRatio ? stockData.metrics.sharpeRatio : '---'}
+          </div>
+          <div className="metric-change neutral">Risk-adjusted return</div>
+        </Card>
+      </div>
+
+      <div style={{ marginBottom: '2rem' }}>
+        <Card style={{ padding: '0', overflow: 'hidden' }}>
+          <Suspense fallback={<div className="loading-overlay" style={{ height: '350px' }}><Loader2 className="spin" size={32} /></div>}>
+            <SimpleLineChart 
+              data={stockData?.timeseries} 
+              symbol={symbol} 
+              market={MARKETS[market]} 
+              period={period} 
+              loading={loading} 
+              onPeriodChange={(newPeriod) => fetchStockData(symbol, newPeriod)} 
+            />
+          </Suspense>
+        </Card>
+      </div>
+
+      <div className="chart-section" style={{ gap: '2rem' }}>
+        <Card className="chart-card">
+          <div className="chart-header">
+            <h3>Advanced Price Visualization</h3>
+            <div className="chart-controls">
+              {TIME_PERIODS.map(p => (
+                <Button
+                  key={p.value}
+                  variant={period === p.value ? 'primary' : 'secondary'}
+                  onClick={() => fetchStockData(symbol, p.value)}
+                  disabled={loading}
+                  style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
+                >
+                  {p.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="chart-container">
+            {loading && !stockData ? (
+              <div className="loading-overlay"><Loader2 className="spin" size={32} /></div>
+            ) : stockData ? (
+              <Suspense fallback={<div className="loading-overlay"><Loader2 className="spin" size={32} /></div>}>
+                <CandlestickChart key={`${symbol}-${period}`} data={stockData.timeseries} symbol={symbol} />
+              </Suspense>
+            ) : (
+              <div className="loading-overlay">No Data Available</div>
             )}
-          </Card>
-          <Card className="metric-card">
-            <h3 className="metric-title">Volume</h3>
-            <div className="metric-value">
-              {stockData ? stockData.metrics.volume.toLocaleString() : '---'}
-            </div>
-            <div className="metric-change neutral">
-              Trading volume
-            </div>
-          </Card>
-          <Card className="metric-card">
-            <h3 className="metric-title">Active Algorithms</h3>
-            <div className="metric-value">Phase 3</div>
-            <div className="metric-change neutral">
-              Waiting for ML module
-            </div>
-          </Card>
-        </div>
+          </div>
+        </Card>
 
-        {/* Dynamic Chart Area */}
-        <div className="chart-section">
-          <Card className="chart-card">
-            <div className="chart-header">
-              <h3>{symbol} Historical Trend</h3>
-              <div className="chart-controls">
-                {TIME_PERIODS.map(p => (
-                  <Button 
-                    key={p.value} 
-                    variant={period === p.value ? 'primary' : 'secondary'} 
-                    onClick={() => handlePeriodChange(p.value)}
-                    disabled={loading}
-                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem' }}
-                  >
-                    {p.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            
-            <div className="chart-container" style={{ flex: 1, minHeight: '350px', position: 'relative' }}>
-              {loading && !stockData ? (
-                <div className="loading-overlay">
-                  <Loader2 className="spin" size={32} />
-                  <span style={{marginLeft: '0.5rem'}}>Fetching live data...</span>
-                </div>
-              ) : stockData && stockData.timeseries ? (
-                <ResponsiveContainer width="100%" height={350}>
-                  <LineChart data={stockData.timeseries} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                    <Line type="monotone" dataKey="price" stroke="#00ff88" strokeWidth={2} dot={false} activeDot={{ r: 6, fill: '#00ff88', stroke: '#fff' }} />
-                    <CartesianGrid stroke="rgba(255,255,255,0.05)" strokeDasharray="3 3" vertical={false} />
-                    <XAxis 
-                      dataKey="date" 
-                      stroke="var(--text-muted)" 
-                      fontSize={12} 
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(val) => {
-                        // Better axis formatting for long periods
-                        const parts = val.split('-');
-                        if (period === '1y' || period === '2y' || period === '5y') {
-                          return `${parts[1]}/${parts[0].slice(2)}`; // MM/YY
-                        }
-                        return `${parts[1]}/${parts[2]}`; // MM/DD
-                      }}
-                    />
-                    <YAxis 
-                      domain={['auto', 'auto']} 
-                      stroke="var(--text-muted)" 
-                      fontSize={12} 
-                      tickLine={false} 
-                      axisLine={false}
-                      tickFormatter={(val) => {
-                        const currentMarket = MARKETS[market];
-                        return new Intl.NumberFormat(currentMarket.locale, { 
-                          style: 'currency', 
-                          currency: currentMarket.currency,
-                          maximumFractionDigits: 0
-                        }).format(val);
-                      }}
-                    />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', border: '1px solid var(--border)', borderRadius: '0.5rem', backdropFilter: 'blur(8px)' }}
-                      labelStyle={{ color: 'var(--text-muted)', marginBottom: '4px' }}
-                      itemStyle={{ color: '#00ff88', fontWeight: 'bold' }}
-                      formatter={(value) => [formatCurrency(value), 'Price']}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="loading-overlay">
-                  No Data Available
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
+        <Card className="chart-card" style={{ padding: '1.5rem' }}>
+          <h3 style={{ marginBottom: '1.5rem' }}>Technical Indicators</h3>
+          {loading && !stockData ? (
+            <div className="loading-overlay"><Loader2 className="spin" size={32} /></div>
+          ) : stockData ? (
+            <Suspense fallback={<div className="loading-overlay"><Loader2 className="spin" size={32} /></div>}>
+              <TechnicalIndicators key={`${symbol}-${period}`} data={stockData.timeseries} />
+            </Suspense>
+          ) : (
+            <div className="loading-overlay">No Data Available</div>
+          )}
+        </Card>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="dashboard-container">
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
+      <main className="dashboard-main">
+        {activeTab === 'dashboard' && renderDashboardView()}
+        {activeTab === 'portfolio' && (
+          <div>
+            <h2 style={{ marginBottom: '2rem', fontSize: '2rem' }}>Portfolio Management</h2>
+            <Suspense fallback={<div className="loading-overlay"><Loader2 className="spin" size={32} /></div>}>
+              <Portfolio />
+            </Suspense>
+          </div>
+        )}
+        {activeTab === 'transactions' && (
+          <div>
+            <h2 style={{ marginBottom: '2rem', fontSize: '2rem' }}>Transactions</h2>
+            <Suspense fallback={<div className="loading-overlay"><Loader2 className="spin" size={32} /></div>}>
+              <Transactions />
+            </Suspense>
+          </div>
+        )}
+        {activeTab === 'compare' && (
+          <div>
+            <h2 style={{ marginBottom: '2rem', fontSize: '2rem' }}>Stock Comparison</h2>
+            <Suspense fallback={<div className="loading-overlay"><Loader2 className="spin" size={32} /></div>}>
+              <Comparison />
+            </Suspense>
+          </div>
+        )}
+        {activeTab === 'predictions' && (
+          <div>
+            <h2 style={{ marginBottom: '2rem', fontSize: '2rem' }}>AI Forecast</h2>
+            <Suspense fallback={<div className="loading-overlay"><Loader2 className="spin" size={32} /></div>}>
+              <PredictionChart symbol={symbol} historicalData={stockData?.timeseries} />
+            </Suspense>
+          </div>
+        )}
       </main>
     </div>
   );

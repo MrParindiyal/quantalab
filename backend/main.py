@@ -1,18 +1,19 @@
 from contextlib import asynccontextmanager
 from database import engine, get_db
 from datetime import datetime, timedelta
+from decimal import Decimal
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 import models, numpy, os, schemas
+import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sqlalchemy.orm import Session
 import ta
 from utils import hash_password, check_password
 import uvicorn
 import yfinance as yf
-import pandas as pd
 
 SECRET_KEY = str(os.getenv("SECRET_KEY", "mysecret"))
 JWT_SIGNING_ALGO = "HS256" #HMAC SHA 256 symmetric
@@ -323,12 +324,12 @@ def execute_order(
     ):
     try:
         stock = yf.Ticker(transaction.stock_symbol.upper())
-        current_price = float(stock.fast_info['last_price'])
+        current_price = Decimal(stock.fast_info['last_price'])
 
-        if not current_price or numpy.isnan(current_price):
+        if not current_price or current_price.is_nan():
             raise HTTPException(status_code=400, detail="Invalid stock symbol or price unavailable")
 
-        total_cost = current_price * transaction.quantity
+        total_cost = current_price * (transaction.quantity)
 
         holding = db.query(models.Portfolio).filter(
             models.Portfolio.user_id == current_user.id, 
@@ -351,6 +352,7 @@ def execute_order(
         db.add(new_trxn)
 
         current_user.balance += total_cost if transaction.transaction_type == "sell" else -total_cost
+        current_user.balance = round(current_user.balance, 3)
         
         if transaction.transaction_type == "buy":
             if holding is None:
@@ -363,8 +365,9 @@ def execute_order(
                 db.add(new_portfolio)
 
             else:
-                holding.average_price = ((holding.average_price * holding.quantity) + total_cost) / (holding.quantity + transaction.quantity)
+                holding.average_price = round(((holding.average_price * holding.quantity) + total_cost) / (holding.quantity + transaction.quantity), 3)
                 holding.quantity += transaction.quantity
+                
 
         else:
             holding.quantity -= transaction.quantity

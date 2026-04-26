@@ -8,5 +8,6 @@ pwdlib[argon2]
 scikit-learn
 SQLAlchemy
 streamlit
+ta
 uvicorn
 yfinance

@@ -60,8 +60,8 @@ class StrategyResult(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     strategy_name = Column(String)
-    profit_percentage = Column(Float(10, 3))
-    sharpe_ratio = Column(Float(10, 3))
+    profit_percentage = Column(Numeric(10, 3))
+    sharpe_ratio = Column(Numeric(10, 3))
     backtest_period = Column(String)
 
     owner = relationship("User", back_populates="results")

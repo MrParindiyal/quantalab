@@ -207,16 +207,36 @@ export function Dashboard() {
 
       <div className="metrics-grid">
         <Card className="metric-card">
-          <h3 className="metric-title">{symbol} Price</h3>
-          <div className="metric-value">
-            {stockData ? formatCurrency(stockData.metrics.currentPrice) : '---'}
-          </div>
-          {stockData && (
-            <div className={`metric-change ${stockData.metrics.changePct >= 0 ? 'positive' : 'negative'}`}>
-              {stockData.metrics.changePct >= 0 ? <ArrowUpRight size={16} /> : <TrendingDown size={16} />}
-              {Math.abs(stockData.metrics.changePct)}%
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <h3 className="metric-title">{symbol} Price</h3>
+              <div className="metric-value">
+                {stockData ? formatCurrency(stockData.metrics.currentPrice) : '---'}
+              </div>
+              {stockData && (
+                <div className={`metric-change ${stockData.metrics.changePct >= 0 ? 'positive' : 'negative'}`}>
+                  {stockData.metrics.changePct >= 0 ? <ArrowUpRight size={16} /> : <TrendingDown size={16} />}
+                  {Math.abs(stockData.metrics.changePct)}%
+                </div>
+              )}
             </div>
-          )}
+            {stockData && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <button 
+                  onClick={() => navigate('/trade', { state: { symbol: symbol, price: stockData.metrics.currentPrice }})}
+                  style={{ background: '#22c55e', color: 'white', padding: '4px 16px', borderRadius: '4px', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.75rem' }}
+                >
+                  BUY
+                </button>
+                <button 
+                  onClick={() => navigate('/trade', { state: { symbol: symbol, price: stockData.metrics.currentPrice }})}
+                  style={{ background: '#ef4444', color: 'white', padding: '4px 16px', borderRadius: '4px', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.75rem' }}
+                >
+                  SELL
+                </button>
+              </div>
+            )}
+          </div>
         </Card>
         <Card className="metric-card">
           <h3 className="metric-title">Volume</h3>

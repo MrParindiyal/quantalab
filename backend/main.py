@@ -314,5 +314,59 @@ def add_portfolio_item(item: schemas.PortfolioCreate, current_user: models.User 
     db.commit()
     return {"message": "Portfolio updated"}
 
+@app.get("/api/balance")
+def get_balance(current_user: models.User = Depends(get_current_user)):
+    return {"balance": float(current_user.balance)}
+
+@app.post("/api/trade")
+def execute_trade(item: schemas.TransactionCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    symbol = item.stock_symbol.upper()
+    quantity = item.quantity
+    price = item.price
+    type_ = item.transaction_type.lower()
+    
+    if type_ == "buy":
+        cost = quantity * price
+        if float(current_user.balance) < cost:
+            raise HTTPException(status_code=400, detail="Insufficient balance")
+        current_user.balance = float(current_user.balance) - cost
+        portfolio = db.query(models.Portfolio).filter_by(user_id=current_user.id, stock_symbol=symbol).first()
+        if portfolio:
+            new_qty = float(portfolio.quantity) + quantity
+            portfolio.average_price = (float(portfolio.quantity) * float(portfolio.average_price) + quantity * price) / new_qty
+            portfolio.quantity = new_qty
+        else:
+            db.add(models.Portfolio(user_id=current_user.id, stock_symbol=symbol, quantity=quantity, average_price=price))
+        db.add(models.Transaction(user_id=current_user.id, stock_symbol=symbol, transaction_type="buy", quantity=quantity, price=price))
+        db.commit()
+        return {"message": "Buy successful", "balance": float(current_user.balance)}
+    
+    elif type_ == "sell":
+        portfolio = db.query(models.Portfolio).filter_by(user_id=current_user.id, stock_symbol=symbol).first()
+        if not portfolio or float(portfolio.quantity) < quantity:
+            raise HTTPException(status_code=400, detail="Insufficient shares")
+        proceeds = quantity * price
+        current_user.balance = float(current_user.balance) + proceeds
+        portfolio.quantity = float(portfolio.quantity) - quantity
+        if float(portfolio.quantity) <= 0:
+            db.delete(portfolio)
+        db.add(models.Transaction(user_id=current_user.id, stock_symbol=symbol, transaction_type="sell", quantity=quantity, price=price))
+        db.commit()
+        return {"message": "Sell successful", "balance": float(current_user.balance)}
+    
+    raise HTTPException(status_code=400, detail="Invalid transaction type")
+
+@app.get("/api/transactions")
+def get_transactions(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    txs = db.query(models.Transaction).filter_by(user_id=current_user.id).order_by(models.Transaction.timestamp.desc()).all()
+    return [{
+        "id": row.id,
+        "stock_symbol": row.stock_symbol,
+        "transaction_type": row.transaction_type,
+        "quantity": float(row.quantity),
+        "price": float(row.price),
+        "timestamp": row.timestamp.strftime("%Y-%m-%d %H:%M") if row.timestamp else ""
+    } for row in txs]
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

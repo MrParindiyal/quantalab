@@ -1,8 +1,10 @@
 import React from 'react';
-import { LayoutDashboard, PieChart, TrendingUp, GitCompare, Settings, LogOut, List } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { LayoutDashboard, PieChart, TrendingUp, GitCompare, Settings, LogOut, List, DollarSign } from 'lucide-react';
 import './Sidebar.css';
 
 export function Sidebar({ activeTab, setActiveTab, onLogout }) {
+  const navigate = useNavigate();
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { id: 'portfolio', label: 'Portfolio', icon: <PieChart size={20} /> },
@@ -21,12 +23,26 @@ export function Sidebar({ activeTab, setActiveTab, onLogout }) {
           <button
             key={tab.id}
             className={`sidebar-tab ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              // If we are currently on /trade, we need to navigate back to dashboard first
+              if (window.location.pathname === '/trade') {
+                navigate('/dashboard', { state: { initialTab: tab.id } });
+              } else {
+                setActiveTab(tab.id);
+              }
+            }}
           >
             {tab.icon}
             <span>{tab.label}</span>
           </button>
         ))}
+        <button
+          className={`sidebar-tab ${activeTab === 'trade' ? 'active' : ''}`}
+          onClick={() => navigate('/trade')}
+        >
+          <DollarSign size={20} />
+          <span>Paper Trading</span>
+        </button>
       </nav>
       <div className="sidebar-footer">
         <button className="sidebar-tab" onClick={onLogout}>

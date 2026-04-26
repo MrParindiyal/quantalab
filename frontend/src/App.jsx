@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { LandingPage } from './pages/LandingPage';
 import { Dashboard } from './pages/Dashboard';
 
+import Trade from './pages/Trade';
+
 // A simple wrapper to protect routes (mocked for now)
 function ProtectedRoute({ children }) {
   // In a real app, you'd check context/state or localStorage for a JWT
@@ -24,6 +26,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/trade" 
+        element={
+          <ProtectedRoute>
+            <Trade />
           </ProtectedRoute>
         } 
       />

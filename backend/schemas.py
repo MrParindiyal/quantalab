@@ -16,3 +16,13 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class PortfolioCreate(BaseModel):
+    stock_symbol: str
+    quantity: float
+    average_price: float
+
+class TransactionCreate(BaseModel):
+    stock_symbol: str
+    transaction_type: str
+    quantity: float
+    price: float

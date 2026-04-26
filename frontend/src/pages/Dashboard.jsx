@@ -4,6 +4,7 @@ import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { ArrowUpRight, TrendingDown, Search, Loader2 } from 'lucide-react';
 import { Sidebar } from '../components/Sidebar';
+import { TradeModal } from '../components/common/TradeModal';
 import './Dashboard.css';
 
 const CandlestickChart = lazy(() => import('../components/charts/CandlestickChart').then(m => ({ default: m.CandlestickChart })));
@@ -74,6 +75,21 @@ export function Dashboard() {
 
   // Navigation State
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalType, setModalType] = useState('buy'); // 'buy' or 'sell'
+
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = (message, type) => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter(t => t.id !== id));
+  };
 
   // Data States
   const [market, setMarket] = useState('INDIA');
@@ -246,6 +262,22 @@ export function Dashboard() {
           </div>
           <div className="metric-change neutral">Risk-adjusted return</div>
         </Card>
+        <Card className="metric-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.75rem' }}>
+          <Button 
+            variant="primary" 
+            style={{ backgroundColor: '#10b981', color: 'white', border: 'none', padding: '0.8rem' }}
+            onClick={() => { setModalType('buy'); setIsModalOpen(true); }}
+          >
+            Buy {symbol?.split('.')[0]}
+          </Button>
+          <Button 
+            variant="secondary" 
+            style={{ backgroundColor: 'var(--danger)', color: 'white', border: 'none', padding: '0.8rem' }}
+            onClick={() => { setModalType('sell'); setIsModalOpen(true); }}
+          >
+            Sell {symbol?.split('.')[0]}
+          </Button>
+        </Card>
       </div>
 
       <div style={{ marginBottom: '2rem' }}>
@@ -307,6 +339,13 @@ export function Dashboard() {
           )}
         </Card>
       </div>
+      <TradeModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        symbol={symbol} 
+        stockData={stockData} 
+        type={modalType} 
+      />
     </>
   );
 

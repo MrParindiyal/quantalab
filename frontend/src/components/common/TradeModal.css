@@ -1,0 +1,172 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: #1a1d24;
+  width: 90%;
+  max-width: 700px;
+  border-radius: 1.5rem;
+  position: relative;
+  border: 1px solid #2d333f;
+  color: white;
+  overflow: hidden;
+}
+
+.modal-body {
+  display: flex;
+  min-height: 400px;
+}
+
+.modal-stats-section {
+  flex: 1;
+  padding: 2rem;
+  background: #1f232c;
+  border-right: 1px solid #2d333f;
+}
+
+.modal-action-section {
+  flex: 1;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.close-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.symbol-tag {
+  background: #334155;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.stats-list {
+  margin-top: 2rem;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #2d333f;
+}
+
+.pos { color: #10b981; }
+.neg { color: #ef4444; }
+
+.input-group input {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: white;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 1.2rem;
+}
+
+.pill-container {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.increment-pill {
+  background: #334155;
+  border: none;
+  color: white;
+  padding: 0.4rem 0.6rem;
+  border-radius: 2rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.total-preview {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem 0;
+  font-weight: bold;
+}
+
+.inventory-note {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  background: rgba(245, 158, 11, 0.1); /* Subtle amber/gold tint */
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+  line-height: 1.4;
+  border-left: 3px solid #f59e0b;
+}
+
+.inventory-note strong {
+  color: #f59e0b;
+}
+
+.execute-btn {
+  width: 100%;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border: none;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.execute-btn.buy { background: #10b981; }
+.execute-btn.sell { background: #ef4444; }
+
+/* Animation for the spinner */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+/* Reset pill styling */
+.reset-pill {
+  background: rgba(239, 68, 68, 0.1) !important;
+  color: #ef4444 !important;
+  border: 1px solid rgba(239, 68, 68, 0.2) !important;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+
+.reset-pill:hover {
+  background: rgba(239, 68, 68, 0.2) !important;
+}
+
+/* Disabled states for polish */
+button:disabled, input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.execute-btn:disabled {
+  background: #334155 !important;
+  cursor: not-allowed;
+}

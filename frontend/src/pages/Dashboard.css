@@ -67,8 +67,11 @@
 
 .metric-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 40px -10px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 12px 40px -10px rgba(59, 246, 246, 0.3);
   border-color: rgba(59, 130, 246, 0.3);
+  opacity: 0.9;
+  transform: scale(1.02);
+  transition: transform 0.2s ease;
 }
 
 .metric-title {

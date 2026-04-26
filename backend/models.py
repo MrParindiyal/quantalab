@@ -2,7 +2,6 @@ from database import Base
 from sqlalchemy import (
     Column,
     DateTime,
-    Float,
     ForeignKey,
     func,
     Integer,
@@ -33,7 +32,7 @@ class Transaction(Base):
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     stock_symbol = Column(String)
     transaction_type = Column(String)
-    quantity = Column(Numeric(12, 4), default=0)
+    quantity = Column(Numeric(12, 1), default=0)
     price = Column(Numeric(10, 3))
     timestamp = Column(DateTime, server_default=func.current_timestamp())
 

@@ -38,7 +38,7 @@ class PortfolioResponse(BaseModel):
 class TransactionCreate(BaseModel):
     stock_symbol: str = Field(..., min_length=1, max_length=20)
     transaction_type: str = Field(..., pattern="^(buy|sell)$")
-    quantity: Decimal = Field(..., gt=0)
+    quantity: Decimal = Field(..., gt=0, decimal_places=1)
     price: Decimal | None = None
 
 

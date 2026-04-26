@@ -50,9 +50,9 @@ export function Transactions() {
               <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
                 <th style={{ padding: '1rem 0.5rem', fontWeight: 500 }}>Symbol</th>
                 <th style={{ padding: '1rem 0.5rem', fontWeight: 500 }}>Type</th>
-                <th style={{ padding: '1rem 0.5rem', fontWeight: 500 }}>Quantity</th>
-                <th style={{ padding: '1rem 0.5rem', fontWeight: 500 }}>Price</th>
-                <th style={{ padding: '1rem 0.5rem', fontWeight: 500 }}>Timestamp</th>
+                <th style={{ padding: '1rem 0.5rem', fontWeight: 500, textAlign: 'right' }}>Quantity</th>
+                <th style={{ padding: '1rem 0.5rem', fontWeight: 500, textAlign: 'right' }}>Price</th>
+                <th style={{ padding: '1rem 0.5rem', fontWeight: 500, textAlign: 'right' }}>Timestamp</th>
               </tr>
             </thead>
             <tbody>
@@ -67,9 +67,13 @@ export function Transactions() {
                   }}>
                     {tx.transaction_type}
                   </td>
-                  <td style={{ padding: '1rem 0.5rem' }}>{tx.quantity}</td>
-                  <td style={{ padding: '1rem 0.5rem' }}>${parseFloat(tx.price).toFixed(2)}</td>
-                  <td style={{ padding: '1rem 0.5rem', color: 'var(--text-muted)' }}>
+                  <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontFamily: 'monospace', fontSize: '1.1rem' }}>
+                    {parseFloat(tx.quantity).toFixed(1)}
+                  </td>
+                  <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontFamily: 'monospace', fontSize: '1.1rem' }}>
+                    ${parseFloat(tx.price).toFixed(2)}
+                  </td>
+                  <td style={{ padding: '1rem 0.5rem', textAlign: 'right', color: 'var(--text-muted)' }}>
                     {new Date(tx.timestamp).toLocaleString()}
                   </td>
                 </tr>

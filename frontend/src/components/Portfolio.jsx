@@ -62,7 +62,9 @@ export function Portfolio() {
     }
   };
 
-  const pieSeries = portfolio.map(item => parseFloat(item.quantity) * parseFloat(item.average_price));
+  const pieSeries = portfolio.map(item => 
+    Math.round((parseFloat(item.quantity) * parseFloat(item.average_price)) * 100) / 100
+  );
   const pieLabels = portfolio.map(item => item.stock_symbol);
 
   const pieOptions = {
@@ -70,7 +72,18 @@ export function Portfolio() {
     labels: pieLabels,
     theme: { mode: 'dark' },
     stroke: { show: false },
-    legend: { position: 'bottom', labels: { colors: '#f8fafc' } }
+    legend: { position: 'bottom', labels: { colors: '#f8fafc' } },
+    tooltip: {
+      y: {
+        formatter: (val) => `$${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      }
+    },
+    dataLabels: {
+      enabled: true,
+      formatter: function (val, opts) {
+          return val.toFixed(1) + "%"
+      }
+    }
   };
 
   return (

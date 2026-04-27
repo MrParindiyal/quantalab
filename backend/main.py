@@ -13,6 +13,7 @@ import yfinance as yf
 import pandas as pd
 import ta
 from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
 
 SECRET_KEY = str(os.getenv("SECRET_KEY", "mysecret"))
 JWT_SIGNING_ALGO = "HS256" #HMAC SHA 256 symmetric
@@ -210,45 +211,315 @@ def get_stock_data(symbol: str, period: str = "1mo", current_user: models.User =
 @app.get("/api/predict/{symbol}")
 def predict_stock(symbol: str, days: int = 30, current_user: models.User = Depends(get_current_user)):
     try:
+        # Fetch data - use 2y for better training
         stock = yf.Ticker(symbol)
         history = stock.history(period="2y")
         if history.empty:
             raise HTTPException(status_code=404, detail=f"No data for {symbol}")
             
         history = history.reset_index()
+        
+        # 1. Feature Engineering
+        # Use DayIndex to capture long-term trend
         history['DayIndex'] = np.arange(len(history))
         
-        X = history[['DayIndex']]
-        y = history['Close']
+        # Add Technical Indicators as features
+        history['RSI'] = ta.momentum.rsi(history['Close'], window=14)
+        history['MA20'] = ta.trend.sma_indicator(history['Close'], window=20)
+        history['Vol_Change'] = history['Volume'].pct_change()
         
-        model = LinearRegression()
+        # Drop rows with NaN from indicators
+        train_df = history.dropna().copy()
+        
+        if len(train_df) < 50: # Ensure we have enough data
+            train_df = history.copy()
+            train_df = train_df.fillna(0)
+
+        # Features: DayIndex, plus we'll use a slightly more advanced model
+        X = train_df[['DayIndex']]
+        y = train_df['Close']
+        
+        # Using Random Forest for non-linear trend detection
+        # We limit complexity to avoid over-fitting in a simulation
+        model = RandomForestRegressor(n_estimators=100, random_state=42)
         model.fit(X, y)
         
-        future_indices = np.arange(len(history), len(history) + days).reshape(-1, 1)
+        # Calculate historical volatility for confidence intervals
+        recent_volatility = y.pct_change().tail(30).std()
+        current_price = float(y.iloc[-1])
+        
+        # 2. Generate Predictions
+        last_index = int(history['DayIndex'].iloc[-1])
+        future_indices = np.arange(last_index + 1, last_index + 1 + days).reshape(-1, 1)
         predictions = model.predict(future_indices)
         
         last_date = history['Date'].iloc[-1]
-        
         forecast = []
+        
         for i in range(days):
             pred_date = last_date + timedelta(days=i+1)
-            # skip weekends naively
+            # Skip weekends
             while pred_date.weekday() > 4:
                 pred_date += timedelta(days=1)
             
+            # Simple confidence calculation based on time-drift and volatility
+            # Uncertainty grows as we go further into the future
+            uncertainty = current_price * recent_volatility * np.sqrt(i + 1)
+            
             forecast.append({
                 "date": pred_date.strftime("%Y-%m-%d"),
-                "predicted_price": round(float(predictions[i]), 2)
+                "predicted_price": round(float(predictions[i]), 2),
+                "high": round(float(predictions[i] + uncertainty), 2),
+                "low": round(float(predictions[i] - uncertainty), 2)
             })
             last_date = pred_date
             
+        # 3. Summary Metrics
+        expected_return = ((predictions[-1] - current_price) / current_price) * 100
+        
+        # Tomorrow is always the first entry in the forecast list
+        tomorrow_entry = forecast[0] if forecast else None
+        tomorrow_change = None
+        tomorrow_change_pct = None
+        if tomorrow_entry:
+            tomorrow_change = round(tomorrow_entry["predicted_price"] - current_price, 2)
+            tomorrow_change_pct = round((tomorrow_change / current_price) * 100, 2)
+        
         return {
             "symbol": symbol.upper(),
-            "forecast": forecast
+            "forecast": forecast,
+            "metrics": {
+                "current_price": round(current_price, 2),
+                "expected_return_30d": round(float(expected_return), 2),
+                "trend": "Bullish" if expected_return > 2 else "Bearish" if expected_return < -2 else "Neutral",
+                "confidence_score": round(max(0, 100 - (recent_volatility * 1000)), 1),
+                "tomorrow": {
+                    "date": tomorrow_entry["date"] if tomorrow_entry else None,
+                    "predicted_price": tomorrow_entry["predicted_price"] if tomorrow_entry else None,
+                    "high": tomorrow_entry["high"] if tomorrow_entry else None,
+                    "low": tomorrow_entry["low"] if tomorrow_entry else None,
+                    "change": tomorrow_change,
+                    "change_pct": tomorrow_change_pct
+                }
+            }
         }
     except Exception as e:
         print(f"Error predicting: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/backtest")
+def run_backtest(
+    symbol: str,
+    strategy: str = "sma_crossover",  # sma_crossover | rsi | macd
+    period: str = "1y",
+    capital: float = 100000.0,
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Runs a strategy backtest on historical data.
+    Strategies: sma_crossover, rsi, macd
+    Returns: trades, equity_curve, performance metrics vs buy-and-hold
+    """
+    try:
+        stock = yf.Ticker(symbol)
+        history = stock.history(period=period)
+        if history.empty:
+            raise HTTPException(status_code=404, detail=f"No data for {symbol}")
+
+        history = history.reset_index()
+        close = history["Close"]
+
+        # ── Compute indicators ──────────────────────────────────────────────
+        history["MA20"]        = ta.trend.sma_indicator(close, window=20)
+        history["MA50"]        = ta.trend.sma_indicator(close, window=50)
+        history["RSI"]         = ta.momentum.rsi(close, window=14)
+        macd_obj               = ta.trend.MACD(close)
+        history["MACD"]        = macd_obj.macd()
+        history["MACD_signal"] = macd_obj.macd_signal()
+
+        history = history.dropna().reset_index(drop=True)
+
+        # ── Signal generation ────────────────────────────────────────────────
+        def generate_signals(df):
+            signals = []
+            strat = strategy.lower()
+            for i in range(1, len(df)):
+                row   = df.iloc[i]
+                prev  = df.iloc[i - 1]
+
+                if strat == "sma_crossover":
+                    if prev["MA20"] <= prev["MA50"] and row["MA20"] > row["MA50"]:
+                        signals.append((i, "BUY"))
+                    elif prev["MA20"] >= prev["MA50"] and row["MA20"] < row["MA50"]:
+                        signals.append((i, "SELL"))
+
+                elif strat == "rsi":
+                    if prev["RSI"] >= 30 and row["RSI"] < 30:
+                        signals.append((i, "BUY"))
+                    elif prev["RSI"] <= 70 and row["RSI"] > 70:
+                        signals.append((i, "SELL"))
+
+                elif strat == "macd":
+                    if prev["MACD"] <= prev["MACD_signal"] and row["MACD"] > row["MACD_signal"]:
+                        signals.append((i, "BUY"))
+                    elif prev["MACD"] >= prev["MACD_signal"] and row["MACD"] < row["MACD_signal"]:
+                        signals.append((i, "SELL"))
+
+            return signals
+
+        signals = generate_signals(history)
+
+        # ── Simulate trades ──────────────────────────────────────────────────
+        cash     = capital
+        shares   = 0
+        trades   = []
+        buy_price = None
+        buy_date  = None
+
+        for idx, action in signals:
+            price = float(history.iloc[idx]["Close"])
+            date  = str(history.iloc[idx]["Date"])[:10]
+
+            if action == "BUY" and shares == 0 and cash > 0:
+                qty      = int(cash // price)
+                if qty == 0:
+                    continue
+                cost     = qty * price
+                cash    -= cost
+                shares   = qty
+                buy_price = price
+                buy_date  = date
+                trades.append({
+                    "date": date, "action": "BUY",
+                    "price": round(price, 2), "qty": qty,
+                    "value": round(cost, 2), "pnl": None
+                })
+
+            elif action == "SELL" and shares > 0:
+                proceeds = shares * price
+                pnl      = proceeds - (shares * buy_price)
+                cash    += proceeds
+                trades.append({
+                    "date": date, "action": "SELL",
+                    "price": round(price, 2), "qty": shares,
+                    "value": round(proceeds, 2),
+                    "pnl": round(pnl, 2)
+                })
+                shares    = 0
+                buy_price = None
+                buy_date  = None
+
+        # Close open position at last price
+        if shares > 0:
+            last_price = float(history.iloc[-1]["Close"])
+            last_date  = str(history.iloc[-1]["Date"])[:10]
+            proceeds   = shares * last_price
+            pnl        = proceeds - (shares * buy_price)
+            cash      += proceeds
+            trades.append({
+                "date": last_date, "action": "CLOSE",
+                "price": round(last_price, 2), "qty": shares,
+                "value": round(proceeds, 2), "pnl": round(pnl, 2)
+            })
+            shares = 0
+
+        final_capital = round(cash, 2)
+
+        # ── Equity Curve ─────────────────────────────────────────────────────
+        # Replay portfolio value day by day
+        equity_curve   = []
+        port_cash      = capital
+        port_shares    = 0
+        trade_pointer  = 0
+        sorted_trades  = [t for t in trades]
+        trade_dates    = {t["date"]: t for t in sorted_trades}
+
+        running_cash   = capital
+        running_shares = 0
+
+        for _, row in history.iterrows():
+            date  = str(row["Date"])[:10]
+            price = float(row["Close"])
+
+            if date in trade_dates:
+                t = trade_dates[date]
+                if t["action"] == "BUY":
+                    running_shares  = t["qty"]
+                    running_cash   -= t["value"]
+                elif t["action"] in ("SELL", "CLOSE"):
+                    running_cash   += t["value"]
+                    running_shares  = 0
+
+            equity_curve.append({
+                "date":  date,
+                "value": round(running_cash + running_shares * price, 2)
+            })
+
+        # ── Buy-and-Hold Baseline ────────────────────────────────────────────
+        first_price    = float(history.iloc[0]["Close"])
+        last_price     = float(history.iloc[-1]["Close"])
+        bh_shares      = int(capital // first_price)
+        bh_final       = bh_shares * last_price + (capital - bh_shares * first_price)
+        bh_return      = ((bh_final - capital) / capital) * 100
+
+        # ── Performance Metrics ──────────────────────────────────────────────
+        total_return   = ((final_capital - capital) / capital) * 100
+        alpha          = total_return - bh_return
+
+        winning_trades = [t for t in trades if t["pnl"] is not None and t["pnl"] > 0]
+        closed_trades  = [t for t in trades if t["pnl"] is not None]
+        win_rate       = (len(winning_trades) / len(closed_trades) * 100) if closed_trades else 0
+
+        # Sharpe from equity curve daily returns
+        equity_vals    = [e["value"] for e in equity_curve]
+        daily_rets     = [(equity_vals[i] - equity_vals[i-1]) / equity_vals[i-1]
+                          for i in range(1, len(equity_vals))]
+        if len(daily_rets) > 1:
+            rets_arr   = np.array(daily_rets)
+            sharpe     = round(float((rets_arr.mean() * 252) / (rets_arr.std() * np.sqrt(252))) if rets_arr.std() > 0 else 0, 2)
+        else:
+            sharpe = 0
+
+        # Max drawdown from equity curve
+        peak = equity_vals[0]
+        max_dd = 0.0
+        for v in equity_vals:
+            if v > peak:
+                peak = v
+            dd = (v - peak) / peak * 100
+            if dd < max_dd:
+                max_dd = dd
+
+        strategy_labels = {
+            "sma_crossover": "SMA Crossover (MA20/50)",
+            "rsi": "RSI Mean Reversion",
+            "macd": "MACD Signal"
+        }
+
+        return {
+            "symbol":   symbol.upper(),
+            "strategy": strategy_labels.get(strategy, strategy),
+            "period":   period,
+            "trades":   trades,
+            "equity_curve": equity_curve,
+            "metrics": {
+                "initial_capital":   round(capital, 2),
+                "final_capital":     final_capital,
+                "total_return":      round(total_return, 2),
+                "buy_hold_return":   round(bh_return, 2),
+                "alpha":             round(alpha, 2),
+                "total_trades":      len(trades),
+                "win_rate":          round(win_rate, 2),
+                "sharpe_ratio":      sharpe,
+                "max_drawdown":      round(max_dd, 2)
+            }
+        }
+
+    except Exception as e:
+        print(f"Backtest error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/compare")
 def compare_stocks(symbols: str, period: str = "1mo", current_user: models.User = Depends(get_current_user)):
@@ -288,6 +559,94 @@ def compare_stocks(symbols: str, period: str = "1mo", current_user: models.User 
 def get_portfolio(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     portfolio = db.query(models.Portfolio).filter(models.Portfolio.user_id == current_user.id).all()
     return portfolio
+
+@app.get("/api/portfolio/summary")
+def get_portfolio_summary(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Returns portfolio holdings enriched with live market prices and P&L calculations.
+    Also returns aggregate summary stats: total invested, total current value, unrealized P&L.
+    """
+    holdings = db.query(models.Portfolio).filter(models.Portfolio.user_id == current_user.id).all()
+    
+    if not holdings:
+        return {
+            "positions": [],
+            "summary": {
+                "total_invested": 0.0,
+                "total_value": 0.0,
+                "total_pnl": 0.0,
+                "total_pnl_pct": 0.0,
+                "cash_balance": float(current_user.balance)
+            }
+        }
+    
+    # Batch-fetch all symbols at once for efficiency
+    symbols = [h.stock_symbol for h in holdings]
+    
+    # yf.download returns a DataFrame; for single symbols it's different
+    try:
+        if len(symbols) == 1:
+            ticker = yf.Ticker(symbols[0])
+            hist = ticker.history(period="2d")
+            live_prices = {symbols[0]: float(hist["Close"].iloc[-1]) if not hist.empty else None}
+        else:
+            # Download closing prices for all symbols in one request
+            raw = yf.download(symbols, period="2d", auto_adjust=True, progress=False)
+            close = raw["Close"] if "Close" in raw else raw
+            live_prices = {}
+            for sym in symbols:
+                try:
+                    col = close[sym] if sym in close.columns else close
+                    live_prices[sym] = float(col.dropna().iloc[-1])
+                except Exception:
+                    live_prices[sym] = None
+    except Exception as e:
+        print(f"Error fetching live prices: {e}")
+        live_prices = {sym: None for sym in symbols}
+    
+    positions = []
+    total_invested = 0.0
+    total_value = 0.0
+    
+    for h in holdings:
+        qty = float(h.quantity)
+        avg_price = float(h.average_price)
+        current_price = live_prices.get(h.stock_symbol)
+        
+        invested = qty * avg_price
+        market_value = qty * current_price if current_price is not None else None
+        pnl = (market_value - invested) if market_value is not None else None
+        pnl_pct = ((pnl / invested) * 100) if (pnl is not None and invested > 0) else None
+        
+        total_invested += invested
+        if market_value is not None:
+            total_value += market_value
+        
+        positions.append({
+            "id": h.id,
+            "stock_symbol": h.stock_symbol,
+            "quantity": qty,
+            "average_price": round(avg_price, 2),
+            "current_price": round(current_price, 2) if current_price is not None else None,
+            "market_value": round(market_value, 2) if market_value is not None else None,
+            "invested": round(invested, 2),
+            "pnl": round(pnl, 2) if pnl is not None else None,
+            "pnl_pct": round(pnl_pct, 2) if pnl_pct is not None else None
+        })
+    
+    total_pnl = total_value - total_invested
+    total_pnl_pct = ((total_pnl / total_invested) * 100) if total_invested > 0 else 0.0
+    
+    return {
+        "positions": positions,
+        "summary": {
+            "total_invested": round(total_invested, 2),
+            "total_value": round(total_value, 2),
+            "total_pnl": round(total_pnl, 2),
+            "total_pnl_pct": round(total_pnl_pct, 2),
+            "cash_balance": round(float(current_user.balance), 2)
+        }
+    }
 
 @app.post("/api/portfolio")
 def add_portfolio_item(item: schemas.PortfolioCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):

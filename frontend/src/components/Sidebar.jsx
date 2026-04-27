@@ -1,16 +1,17 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, PieChart, TrendingUp, GitCompare, Settings, LogOut, List, DollarSign } from 'lucide-react';
+import { LayoutDashboard, PieChart, TrendingUp, GitCompare, LogOut, List, DollarSign, FlaskConical } from 'lucide-react';
 import './Sidebar.css';
 
 export function Sidebar({ activeTab, setActiveTab, onLogout }) {
   const navigate = useNavigate();
   const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-    { id: 'portfolio', label: 'Portfolio', icon: <PieChart size={20} /> },
-    { id: 'transactions', label: 'Transactions', icon: <List size={20} /> },
-    { id: 'compare', label: 'Compare', icon: <GitCompare size={20} /> },
-    { id: 'predictions', label: 'AI Predictions', icon: <TrendingUp size={20} /> },
+    { id: 'dashboard',   label: 'Dashboard',      icon: <LayoutDashboard size={20} /> },
+    { id: 'portfolio',   label: 'Portfolio',       icon: <PieChart size={20} />       },
+    { id: 'transactions',label: 'Transactions',    icon: <List size={20} />           },
+    { id: 'compare',     label: 'Compare',         icon: <GitCompare size={20} />     },
+    { id: 'predictions', label: 'AI Predictions',  icon: <TrendingUp size={20} />     },
+    { id: 'backtest',    label: 'Backtesting',     icon: <FlaskConical size={20} />   },
   ];
 
   return (

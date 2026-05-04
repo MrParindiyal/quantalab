@@ -12,12 +12,41 @@ import uvicorn
 import yfinance as yf
 import pandas as pd
 import ta
+import time
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 
 SECRET_KEY = str(os.getenv("SECRET_KEY", "mysecret"))
 JWT_SIGNING_ALGO = "HS256" #HMAC SHA 256 symmetric
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+_exchange_rates_cache = {
+    "rates": {"USD": 83.0, "EUR": 90.0, "INR": 1.0},
+    "last_updated": 0
+}
+
+def get_exchange_rates():
+    current_time = time.time()
+    if current_time - _exchange_rates_cache["last_updated"] > 3600:
+        try:
+            tickers = yf.download(["USDINR=X", "EURINR=X"], period="1d", progress=False)
+            close = tickers["Close"] if "Close" in tickers else tickers
+            if "USDINR=X" in close:
+                _exchange_rates_cache["rates"]["USD"] = float(close["USDINR=X"].dropna().iloc[-1])
+            if "EURINR=X" in close:
+                _exchange_rates_cache["rates"]["EUR"] = float(close["EURINR=X"].dropna().iloc[-1])
+            _exchange_rates_cache["last_updated"] = current_time
+        except Exception as e:
+            print(f"Failed to fetch exchange rates: {e}")
+    return _exchange_rates_cache["rates"]
+
+def get_currency_for_symbol(symbol: str) -> str:
+    if symbol.endswith(".NS") or symbol.endswith(".BO"):
+        return "INR"
+    elif symbol.endswith(".AS") or symbol.endswith(".SW") or symbol.endswith(".PA") or symbol.endswith(".DE") or symbol.endswith(".L"):
+        return "EUR"
+    else:
+        return "USD"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -578,7 +607,8 @@ def get_portfolio_summary(current_user: models.User = Depends(get_current_user),
                 "total_pnl": 0.0,
                 "total_pnl_pct": 0.0,
                 "cash_balance": float(current_user.balance)
-            }
+            },
+            "rates": get_exchange_rates()
         }
     
     # Batch-fetch all symbols at once for efficiency
@@ -609,23 +639,31 @@ def get_portfolio_summary(current_user: models.User = Depends(get_current_user),
     total_invested = 0.0
     total_value = 0.0
     
+    rates = get_exchange_rates()
     for h in holdings:
         qty = float(h.quantity)
         avg_price = float(h.average_price)
         current_price = live_prices.get(h.stock_symbol)
+        
+        currency = get_currency_for_symbol(h.stock_symbol)
+        conversion_rate = rates.get(currency, 1.0)
         
         invested = qty * avg_price
         market_value = qty * current_price if current_price is not None else None
         pnl = (market_value - invested) if market_value is not None else None
         pnl_pct = ((pnl / invested) * 100) if (pnl is not None and invested > 0) else None
         
-        total_invested += invested
-        if market_value is not None:
-            total_value += market_value
+        invested_inr = invested * conversion_rate
+        market_value_inr = market_value * conversion_rate if market_value is not None else None
+        
+        total_invested += invested_inr
+        if market_value_inr is not None:
+            total_value += market_value_inr
         
         positions.append({
             "id": h.id,
             "stock_symbol": h.stock_symbol,
+            "currency": currency,
             "quantity": qty,
             "average_price": round(avg_price, 2),
             "current_price": round(current_price, 2) if current_price is not None else None,
@@ -646,7 +684,8 @@ def get_portfolio_summary(current_user: models.User = Depends(get_current_user),
             "total_pnl": round(total_pnl, 2),
             "total_pnl_pct": round(total_pnl_pct, 2),
             "cash_balance": round(float(current_user.balance), 2)
-        }
+        },
+        "rates": rates
     }
 
 @app.post("/api/portfolio")
@@ -676,7 +715,8 @@ def add_portfolio_item(item: schemas.PortfolioCreate, current_user: models.User 
 
 @app.get("/api/balance")
 def get_balance(current_user: models.User = Depends(get_current_user)):
-    return {"balance": float(current_user.balance)}
+    rates = get_exchange_rates()
+    return {"balance": float(current_user.balance), "rates": rates}
 
 @app.post("/api/trade")
 def execute_trade(item: schemas.TransactionCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -685,11 +725,16 @@ def execute_trade(item: schemas.TransactionCreate, current_user: models.User = D
     price = item.price
     type_ = item.transaction_type.lower()
     
+    currency = get_currency_for_symbol(symbol)
+    rates = get_exchange_rates()
+    conversion_rate = rates.get(currency, 1.0)
+    
+    cost_inr = quantity * price * conversion_rate
+    
     if type_ == "buy":
-        cost = quantity * price
-        if float(current_user.balance) < cost:
+        if float(current_user.balance) < cost_inr:
             raise HTTPException(status_code=400, detail="Insufficient balance")
-        current_user.balance = float(current_user.balance) - cost
+        current_user.balance = float(current_user.balance) - cost_inr
         portfolio = db.query(models.Portfolio).filter_by(user_id=current_user.id, stock_symbol=symbol).first()
         if portfolio:
             new_qty = float(portfolio.quantity) + quantity
@@ -705,8 +750,8 @@ def execute_trade(item: schemas.TransactionCreate, current_user: models.User = D
         portfolio = db.query(models.Portfolio).filter_by(user_id=current_user.id, stock_symbol=symbol).first()
         if not portfolio or float(portfolio.quantity) < quantity:
             raise HTTPException(status_code=400, detail="Insufficient shares")
-        proceeds = quantity * price
-        current_user.balance = float(current_user.balance) + proceeds
+        proceeds_inr = quantity * price * conversion_rate
+        current_user.balance = float(current_user.balance) + proceeds_inr
         portfolio.quantity = float(portfolio.quantity) - quantity
         if float(portfolio.quantity) <= 0:
             db.delete(portfolio)

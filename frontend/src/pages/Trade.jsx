@@ -7,6 +7,7 @@ export default function Trade() {
   const location = useLocation();
 
   const [balance, setBalance] = useState(0);
+  const [rates, setRates] = useState({ USD: 83, EUR: 90, INR: 1 });
   const [portfolio, setPortfolio] = useState([]);
   const [transactions, setTransactions] = useState([]);
   
@@ -36,6 +37,7 @@ export default function Trade() {
       if (res.ok) {
         const data = await res.json();
         setBalance(data.balance);
+        if (data.rates) setRates(data.rates);
       }
     } catch (error) {
       console.error(error);
@@ -240,6 +242,22 @@ export default function Trade() {
     navigate('/');
   };
 
+  const getCurrency = (sym) => {
+    if (!sym) return 'USD';
+    const s = sym.toUpperCase();
+    if (s.endsWith('.NS') || s.endsWith('.BO')) return 'INR';
+    if (s.endsWith('.AS') || s.endsWith('.SW') || s.endsWith('.PA') || s.endsWith('.DE') || s.endsWith('.L')) return 'EUR';
+    return 'USD';
+  };
+
+  const currentCurrency = getCurrency(symbol);
+  const currentRate = rates[currentCurrency] || 1;
+  const displayBalance = balance / currentRate;
+
+  const formatCurrency = (val, curr) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: curr }).format(val);
+  };
+
   return (
     <div className="dashboard-container">
       <Sidebar activeTab="trade" setActiveTab={(tabId) => navigate('/dashboard', { state: { initialTab: tabId } })} onLogout={handleLogout} />
@@ -247,7 +265,7 @@ export default function Trade() {
         <div style={headerStyle}>
         <h2 style={{ color: "white", margin: 0 }}>📈 Paper Trading</h2>
         <div style={pillStyle}>
-          💰 Balance: ${parseFloat(balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          💰 Balance: {formatCurrency(displayBalance, currentCurrency)}
         </div>
       </div>
 
@@ -384,9 +402,9 @@ export default function Trade() {
                   <tr key={idx} style={{ background: idx % 2 === 0 ? "transparent" : "#0d1020" }}>
                     <td style={{ ...tdStyle, color: "#a5b4fc", fontWeight: "600" }}>{row.stock_symbol}</td>
                     <td style={tdStyle}>{qty.toFixed(4)}</td>
-                    <td style={tdStyle}>${avgPrice.toFixed(2)}</td>
+                    <td style={tdStyle}>{formatCurrency(avgPrice, getCurrency(row.stock_symbol))}</td>
                     <td style={{ ...tdStyle, color: valColor }}>
-                      {currentValue !== null ? `$${currentValue.toFixed(2)}` : "—"}
+                      {currentValue !== null ? formatCurrency(currentValue, getCurrency(row.stock_symbol)) : "—"}
                     </td>
                   </tr>
                 );
@@ -395,7 +413,7 @@ export default function Trade() {
             <tfoot>
               <tr style={{ background: "#1a1d27" }}>
                 <td colSpan="3" style={{ padding: "12px 16px", fontWeight: "bold", textAlign: "right" }}>Total Portfolio Value:</td>
-                <td style={{ padding: "12px 16px", fontWeight: "bold" }}>${portfolioTotal.toFixed(2)}</td>
+                <td style={{ padding: "12px 16px", fontWeight: "bold" }}>{formatCurrency(portfolioTotal, currentCurrency)}</td>
               </tr>
             </tfoot>
           </table>
@@ -445,8 +463,8 @@ export default function Trade() {
                       <span style={badgeStyle}>{row.transaction_type.toUpperCase()}</span>
                     </td>
                     <td style={tdStyle}>{parseFloat(row.quantity).toFixed(4)}</td>
-                    <td style={tdStyle}>${parseFloat(row.price).toFixed(2)}</td>
-                    <td style={tdStyle}>${(parseFloat(row.quantity) * parseFloat(row.price)).toFixed(2)}</td>
+                    <td style={tdStyle}>{formatCurrency(parseFloat(row.price), getCurrency(row.stock_symbol))}</td>
+                    <td style={tdStyle}>{formatCurrency(parseFloat(row.quantity) * parseFloat(row.price), getCurrency(row.stock_symbol))}</td>
                   </tr>
                 );
               })}

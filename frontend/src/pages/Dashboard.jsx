@@ -399,8 +399,32 @@ export function Dashboard() {
                 </p>
               </div>
 
-              {/* Stock selector for predictions */}
+              {/* Market & Stock selector for predictions */}
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <select
+                  value={market}
+                  onChange={(e) => {
+                    const newMarket = e.target.value;
+                    setMarket(newMarket);
+                    const firstTicker = Object.keys(MARKETS[newMarket].tickers)[0];
+                    setSymbol(firstTicker);
+                    fetchStockData(firstTicker, period);
+                  }}
+                  style={{
+                    background: 'rgba(30, 41, 59, 0.8)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#f8fafc',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '0.5rem',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="INDIA" style={{ background: '#1e293b' }}>India Market</option>
+                  <option value="US" style={{ background: '#1e293b' }}>US Market</option>
+                  <option value="EU" style={{ background: '#1e293b' }}>EU Market</option>
+                </select>
+
                 <select
                   value={Object.keys(MARKETS[market].tickers).includes(symbol) ? symbol : ''}
                   onChange={(e) => { if (e.target.value) { setSymbol(e.target.value); fetchStockData(e.target.value, period); } }}
@@ -415,7 +439,7 @@ export function Dashboard() {
                   }}
                 >
                   {Object.entries(MARKETS[market].tickers).map(([ticker, name]) => (
-                    <option key={ticker} value={ticker}>{name} ({ticker})</option>
+                    <option key={ticker} value={ticker} style={{ background: '#1e293b' }}>{name} ({ticker})</option>
                   ))}
                 </select>
 

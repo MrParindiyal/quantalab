@@ -32,6 +32,21 @@ export function PredictionChart({ symbol, historicalData, days = 30, historyYear
 
   if (!historicalData || historicalData.length === 0) return null;
 
+  const getCurrencyConfig = (sym) => {
+    if (!sym) return { curr: 'USD', loc: 'en-US' };
+    const s = sym.toUpperCase();
+    if (s.endsWith('.NS') || s.endsWith('.BO')) return { curr: 'INR', loc: 'en-IN' };
+    if (s.endsWith('.AS') || s.endsWith('.SW') || s.endsWith('.PA') || s.endsWith('.DE') || s.endsWith('.L')) return { curr: 'EUR', loc: 'en-IE' };
+    return { curr: 'USD', loc: 'en-US' };
+  };
+
+  const { curr, loc } = getCurrencyConfig(symbol);
+  
+  const formatCurrency = (val) => {
+    if (val == null) return '';
+    return new Intl.NumberFormat(loc, { style: 'currency', currency: curr }).format(val);
+  };
+
   const recentHistory = historicalData.slice(-30).map(item => ({
     x: new Date(item.date).getTime(),
     y: item.price
@@ -74,7 +89,7 @@ export function PredictionChart({ symbol, historicalData, days = 30, historyYear
     yaxis: {
       labels: { 
         style: { colors: '#94a3b8', fontFamily: 'Inter' },
-        formatter: (val) => `$${val.toFixed(2)}`
+        formatter: (val) => formatCurrency(val)
       }
     },
     grid: { 
@@ -137,7 +152,7 @@ export function PredictionChart({ symbol, historicalData, days = 30, historyYear
             </p>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '3rem', fontWeight: '800', color: '#f8fafc', letterSpacing: '-1px' }}>
-                ₹{tmr.predicted_price?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(tmr.predicted_price)}
               </span>
               <span style={{
                 fontSize: '1.25rem', fontWeight: '700',
@@ -149,10 +164,10 @@ export function PredictionChart({ symbol, historicalData, days = 30, historyYear
             <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.25rem' }}>
               vs Today's Close:&nbsp;
               <span style={{ color: '#94a3b8' }}>
-                ₹{metrics.current_price?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(metrics.current_price)}
               </span>
               &nbsp;·&nbsp;
-              {tmrUp ? '+' : ''}₹{tmr.change?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              {tmrUp ? '+' : ''}{formatCurrency(tmr.change)}
             </p>
           </div>
 
@@ -165,7 +180,7 @@ export function PredictionChart({ symbol, historicalData, days = 30, historyYear
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>High</span>
                 <span style={{ fontWeight: '700', color: '#10b981' }}>
-                  ₹{tmr.high?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatCurrency(tmr.high)}
                 </span>
               </div>
               {/* Mini range bar */}
@@ -179,7 +194,7 @@ export function PredictionChart({ symbol, historicalData, days = 30, historyYear
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Low</span>
                 <span style={{ fontWeight: '700', color: '#ef4444' }}>
-                  ₹{tmr.low?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatCurrency(tmr.low)}
                 </span>
               </div>
             </div>

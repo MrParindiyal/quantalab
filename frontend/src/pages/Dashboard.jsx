@@ -85,6 +85,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [predDays, setPredDays] = useState(30);
+  const [historyYears, setHistoryYears] = useState(2);
 
   const TIME_PERIODS = [
     { label: '1M', value: '1mo' },
@@ -374,8 +375,27 @@ export function Dashboard() {
             }}>
               <div>
                 <h2 style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.35rem' }}>AI Predictions</h2>
-                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
-                  Powered by Random Forest Regressor · Trained on 2 years of historical data
+                <p style={{ color: '#94a3b8', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  Powered by Random Forest Regressor · Trained on
+                  <select
+                    value={historyYears}
+                    onChange={(e) => setHistoryYears(Number(e.target.value))}
+                    style={{
+                      background: 'rgba(30, 41, 59, 0.8)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#f8fafc',
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: '0.25rem',
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      outline: 'none'
+                    }}
+                  >
+                    {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(y => (
+                      <option key={y} value={y} style={{ background: '#1e293b' }}>{y}</option>
+                    ))}
+                  </select>
+                  years of historical data
                 </p>
               </div>
 
@@ -425,7 +445,7 @@ export function Dashboard() {
             </div>
 
             <Suspense fallback={<div className="loading-overlay" style={{ height: 400 }}><Loader2 className="spin" size={32} /></div>}>
-              <PredictionChart symbol={symbol} historicalData={stockData?.timeseries} days={predDays} />
+              <PredictionChart symbol={symbol} historicalData={stockData?.timeseries} days={predDays} historyYears={historyYears} />
             </Suspense>
 
             {/* Disclaimer */}

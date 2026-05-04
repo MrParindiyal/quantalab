@@ -209,11 +209,12 @@ def get_stock_data(symbol: str, period: str = "1mo", current_user: models.User =
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/predict/{symbol}")
-def predict_stock(symbol: str, days: int = 30, current_user: models.User = Depends(get_current_user)):
+def predict_stock(symbol: str, days: int = 30, years: int = 2, current_user: models.User = Depends(get_current_user)):
     try:
-        # Fetch data - use 2y for better training
+        years = max(2, years)
+        # Fetch data
         stock = yf.Ticker(symbol)
-        history = stock.history(period="2y")
+        history = stock.history(period=f"{years}y")
         if history.empty:
             raise HTTPException(status_code=404, detail=f"No data for {symbol}")
             

@@ -3,7 +3,7 @@ import ReactApexChart from 'react-apexcharts';
 import { Loader2, TrendingUp, TrendingDown, Target, Zap } from 'lucide-react';
 import { Card } from '../common/Card';
 
-export function PredictionChart({ symbol, historicalData, days = 30 }) {
+export function PredictionChart({ symbol, historicalData, days = 30, historyYears = 2 }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -15,7 +15,7 @@ export function PredictionChart({ symbol, historicalData, days = 30 }) {
       setError('');
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`http://localhost:8000/api/predict/${symbol}?days=${days}`, {
+        const res = await fetch(`http://localhost:8000/api/predict/${symbol}?days=${days}&years=${historyYears}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!res.ok) throw new Error('Prediction failed');
@@ -28,7 +28,7 @@ export function PredictionChart({ symbol, historicalData, days = 30 }) {
       }
     };
     fetchPrediction();
-  }, [symbol, days]);
+  }, [symbol, days, historyYears]);
 
   if (!historicalData || historicalData.length === 0) return null;
 
@@ -213,7 +213,7 @@ export function PredictionChart({ symbol, historicalData, days = 30 }) {
         {loading ? (
           <div style={{ height: 350, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
             <Loader2 className="spin" size={40} color="#3b82f6" />
-            <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Training model on 2-year historical data...</p>
+            <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Training model on {historyYears}-year historical data...</p>
           </div>
         ) : (
           <ReactApexChart

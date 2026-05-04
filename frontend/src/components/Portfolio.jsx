@@ -6,6 +6,14 @@ import { Loader2, TrendingUp, TrendingDown, Wallet, PieChart, BarChart2, ArrowUp
 const fmt = (val, decimals = 2) =>
   val != null ? Number(val).toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : '—';
 
+const formatCurrency = (val, currency) => {
+  if (val == null) return '—';
+  let locale = 'en-US';
+  if (currency === 'INR') locale = 'en-IN';
+  else if (currency === 'EUR') locale = 'en-IE';
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: currency }).format(val);
+};
+
 const DONUT_COLORS = [
   '#3b82f6', '#a855f7', '#10b981', '#f59e0b',
   '#ef4444', '#06b6d4', '#ec4899', '#84cc16',
@@ -59,12 +67,24 @@ export function Portfolio() {
 
   const positions = summary?.positions ?? [];
   const stats = summary?.summary ?? {};
+  const rates = summary?.rates ?? { USD: 83, EUR: 90, INR: 1 };
 
   const isProfitable = stats.total_pnl >= 0;
 
   // ── Donut chart ──────────────────────────────────────────────────────────
-  const donutSeries = positions.map(p => p.market_value ?? p.invested);
+  const donutSeries = positions.map(p => {
+    const val = p.market_value ?? p.invested;
+    const rate = rates[p.currency] || 1;
+    return val * rate;
+  });
   const donutLabels = positions.map(p => p.stock_symbol);
+  
+  if (stats.cash_balance > 0) {
+    donutSeries.push(stats.cash_balance);
+    donutLabels.push('Available Cash');
+  }
+
+  const totalAccountValue = (stats.total_value || 0) + (stats.cash_balance || 0);
 
   const donutOptions = {
     chart: { type: 'donut', background: 'transparent' },
@@ -80,10 +100,10 @@ export function Portfolio() {
             show: true,
             total: {
               show: true,
-              label: 'Portfolio',
+              label: 'Net Worth',
               color: '#94a3b8',
               fontSize: '13px',
-              formatter: () => `₹${fmt(stats.total_value)}`
+              formatter: () => `₹${fmt(totalAccountValue)}`
             }
           }
         }
@@ -156,21 +176,30 @@ export function Portfolio() {
       {/* ── Summary Stat Cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
 
-        {/* Total Value */}
+        {/* Net Worth */}
         <div style={statCardStyle()}>
-          <div style={iconWrap('#3b82f6')}><Wallet size={22} /></div>
+          <div style={iconWrap('#10b981')}><Wallet size={22} /></div>
           <div>
-            <p style={statLabel}>Portfolio Value</p>
+            <p style={statLabel}>Net Worth</p>
+            <h4 style={statValue}>₹{fmt(totalAccountValue)}</h4>
+          </div>
+        </div>
+
+        {/* Equity Value */}
+        <div style={statCardStyle()}>
+          <div style={iconWrap('#3b82f6')}><PieChart size={22} /></div>
+          <div>
+            <p style={statLabel}>Equity Value</p>
             <h4 style={statValue}>₹{fmt(stats.total_value)}</h4>
           </div>
         </div>
 
-        {/* Total Invested */}
+        {/* Available Cash */}
         <div style={statCardStyle()}>
-          <div style={iconWrap('#a855f7')}><BarChart2 size={22} /></div>
+          <div style={iconWrap('#f59e0b')}><BarChart2 size={22} /></div>
           <div>
-            <p style={statLabel}>Total Invested</p>
-            <h4 style={statValue}>₹{fmt(stats.total_invested)}</h4>
+            <p style={statLabel}>Available Cash</p>
+            <h4 style={statValue}>₹{fmt(stats.cash_balance)}</h4>
           </div>
         </div>
 
@@ -183,19 +212,6 @@ export function Portfolio() {
             <p style={statLabel}>Unrealized P&amp;L</p>
             <h4 style={{ ...statValue, color: isProfitable ? '#10b981' : '#ef4444' }}>
               {isProfitable ? '+' : ''}₹{fmt(stats.total_pnl)}
-            </h4>
-          </div>
-        </div>
-
-        {/* Return % */}
-        <div style={statCardStyle()}>
-          <div style={iconWrap(isProfitable ? '#10b981' : '#ef4444')}>
-            {isProfitable ? <ArrowUpRight size={22} /> : <ArrowDownRight size={22} />}
-          </div>
-          <div>
-            <p style={statLabel}>Total Return</p>
-            <h4 style={{ ...statValue, color: isProfitable ? '#10b981' : '#ef4444' }}>
-              {isProfitable ? '+' : ''}{fmt(stats.total_pnl_pct)}%
             </h4>
           </div>
         </div>
@@ -254,11 +270,11 @@ export function Portfolio() {
                       </div>
                     </td>
                     <td style={tdStyle}>{p.quantity}</td>
-                    <td style={tdStyle}>₹{fmt(p.average_price)}</td>
-                    <td style={tdStyle}>{p.current_price != null ? `₹${fmt(p.current_price)}` : '—'}</td>
-                    <td style={tdStyle}>{p.market_value != null ? `₹${fmt(p.market_value)}` : '—'}</td>
+                    <td style={tdStyle}>{formatCurrency(p.average_price, p.currency)}</td>
+                    <td style={tdStyle}>{formatCurrency(p.current_price, p.currency)}</td>
+                    <td style={tdStyle}>{formatCurrency(p.market_value, p.currency)}</td>
                     <td style={{ ...tdStyle, color: p.pnl != null ? (profit ? '#10b981' : '#ef4444') : '#94a3b8', fontWeight: '600' }}>
-                      {p.pnl != null ? `${profit ? '+' : ''}₹${fmt(p.pnl)}` : '—'}
+                      {p.pnl != null ? `${profit ? '+' : ''}${formatCurrency(p.pnl, p.currency)}` : '—'}
                     </td>
                     <td style={{ ...tdStyle, fontWeight: '600' }}>
                       {p.pnl_pct != null ? (
@@ -279,20 +295,6 @@ export function Portfolio() {
             </tbody>
           </table>
         </Card>
-      </div>
-
-      {/* ── Cash Balance Footer ── */}
-      <div style={{
-        padding: '1rem 1.5rem',
-        background: 'rgba(30, 41, 59, 0.5)',
-        borderRadius: '0.75rem',
-        border: '1px solid rgba(255,255,255,0.05)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Available Cash Balance</span>
-        <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#60a5fa' }}>₹{fmt(stats.cash_balance)}</span>
       </div>
 
     </div>

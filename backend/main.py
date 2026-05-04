@@ -722,8 +722,16 @@ def get_balance(current_user: models.User = Depends(get_current_user)):
 def execute_trade(item: schemas.TransactionCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     symbol = item.stock_symbol.upper()
     quantity = item.quantity
-    price = item.price
     type_ = item.transaction_type.lower()
+    
+    try:
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period="1d")
+        if hist.empty:
+            raise HTTPException(status_code=400, detail=f"Invalid symbol or no data for {symbol}")
+        price = float(hist["Close"].iloc[-1])
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Could not fetch live price for trade execution")
     
     currency = get_currency_for_symbol(symbol)
     rates = get_exchange_rates()

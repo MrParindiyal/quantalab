@@ -103,6 +103,19 @@ export default function Trade() {
     }
   };
 
+  const handleQuickQuantity = (percent) => {
+    if (!price || parseFloat(price) <= 0) {
+      setMessage("Please fetch the stock price first.");
+      setMessageType("error");
+      return;
+    }
+    const currentRate = rates[getCurrency(symbol)] || 1;
+    const displayBalance = balance / currentRate;
+    const affordValue = displayBalance * percent;
+    const affordQty = affordValue / parseFloat(price);
+    setQuantity(Math.floor(affordQty * 10000) / 10000); // 4 decimal places
+  };
+
   const handleTrade = async (type) => {
     if (!symbol || !quantity || !price) {
       setMessage("Please fill all fields");
@@ -296,6 +309,23 @@ export default function Trade() {
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
             />
+            <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+              {[0.25, 0.5, 0.75, 1].map(pct => (
+                <button
+                  key={pct}
+                  onClick={() => handleQuickQuantity(pct)}
+                  style={{
+                    background: '#1e2235', border: '1px solid #2d2f45', color: '#94a3b8',
+                    fontSize: '10px', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.target.style.background = '#2d2f45'}
+                  onMouseLeave={(e) => e.target.style.background = '#1e2235'}
+                >
+                  {pct === 1 ? 'MAX' : `${pct * 100}%`}
+                </button>
+              ))}
+            </div>
           </div>
           
           <div style={inputGroupStyle}>

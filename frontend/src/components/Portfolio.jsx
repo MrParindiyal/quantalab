@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { Loader2, TrendingUp, TrendingDown, Wallet, PieChart, BarChart2, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
 import ReactApexChart from 'react-apexcharts';
 import { Card } from './common/Card';
-import { Loader2, TrendingUp, TrendingDown, Wallet, PieChart, BarChart2, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
+import { Button } from './common/Button';
+import { TradeModal } from './common/TradeModal';
 
 const fmt = (val, decimals = 2) =>
   val != null ? Number(val).toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : '—';
@@ -25,6 +27,8 @@ export function Portfolio() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedStock, setSelectedStock] = useState(null);
 
   const fetchSummary = async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
@@ -32,7 +36,7 @@ export function Portfolio() {
     setError('');
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:8000/api/portfolio/summary', {
+      const res = await fetch('http://localhost:8000/api/portfolio?summary=true', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Failed to fetch portfolio');
@@ -47,6 +51,8 @@ export function Portfolio() {
   };
 
   useEffect(() => { fetchSummary(); }, []);
+
+  
 
   if (loading) {
     return (
@@ -95,16 +101,24 @@ export function Portfolio() {
     plotOptions: {
       pie: {
         donut: {
-          size: '72%',
+          size: '75%',
           labels: {
             show: true,
             total: {
               show: true,
-              label: 'Net Worth',
+              label: 'Portfolio',
               color: '#94a3b8',
-              fontSize: '13px',
+              fontSize: '15px',
               formatter: () => `₹${fmt(totalAccountValue)}`
-            }
+            },
+            value: {
+            show: true,
+            fontSize: '20px', // Make it larger
+            fontWeight: 700,
+            color: '#f8fafc', // ADD THIS: Bright white/gray color for the amount
+            offsetY: 5,
+            formatter: (val) => `₹${fmt(val)}`
+          }
           }
         }
       }
@@ -126,7 +140,7 @@ export function Portfolio() {
         <div>
           <h3 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '0.5rem' }}>No Positions Yet</h3>
           <p style={{ color: '#94a3b8', maxWidth: 380, lineHeight: 1.6 }}>
-            Your portfolio is empty. Head to the <strong style={{ color: '#60a5fa' }}>Trade</strong> tab to buy your first position and start building your paper trading portfolio.
+            Your portfolio is empty. Head to the <strong style={{ color: '#60a5fa' }}>Dashboard</strong> tab to buy your first position and start building your portfolio.
           </p>
         </div>
         <div style={{
@@ -146,8 +160,10 @@ export function Portfolio() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      
+      {/* ── Title Header ── */}
+      {/* <h2 style={{ fontSize: '2rem', fontWeight: '600', color: '#f8fafc', marginBottom: '0.5rem' }}>Portfolio Management</h2> */}
 
-      {/* ── Header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h2 style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.25rem' }}>My Portfolio</h2>
@@ -156,147 +172,83 @@ export function Portfolio() {
         <button
           onClick={() => fetchSummary(true)}
           disabled={refreshing}
+          className="refresh-btn" // Using a class or keeping your styles
           style={{
             display: 'flex', alignItems: 'center', gap: '0.5rem',
-            padding: '0.6rem 1.2rem',
-            background: 'rgba(30, 41, 59, 0.8)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '0.75rem',
-            color: '#94a3b8',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            transition: 'all 0.2s'
+            padding: '0.6rem 1.2rem', background: 'rgba(30, 41, 59, 0.8)',
+            border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.75rem',
+            color: '#f8fafc', cursor: 'pointer', fontSize: '0.875rem'
           }}
         >
-          <RefreshCw size={15} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+          <RefreshCw size={15} className={refreshing ? 'spin' : ''} />
           {refreshing ? 'Refreshing…' : 'Refresh Prices'}
         </button>
       </div>
 
-      {/* ── Summary Stat Cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-
-        {/* Net Worth */}
-        <div style={statCardStyle()}>
-          <div style={iconWrap('#10b981')}><Wallet size={22} /></div>
-          <div>
-            <p style={statLabel}>Net Worth</p>
-            <h4 style={statValue}>₹{fmt(totalAccountValue)}</h4>
-          </div>
-        </div>
-
-        {/* Equity Value */}
-        <div style={statCardStyle()}>
-          <div style={iconWrap('#3b82f6')}><PieChart size={22} /></div>
-          <div>
-            <p style={statLabel}>Equity Value</p>
-            <h4 style={statValue}>₹{fmt(stats.total_value)}</h4>
-          </div>
-        </div>
-
-        {/* Available Cash */}
-        <div style={statCardStyle()}>
-          <div style={iconWrap('#f59e0b')}><BarChart2 size={22} /></div>
-          <div>
-            <p style={statLabel}>Available Cash</p>
-            <h4 style={statValue}>₹{fmt(stats.cash_balance)}</h4>
-          </div>
-        </div>
-
-        {/* Unrealized P&L */}
+      {/* ── Stat Cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem' }}>
+        <div style={statCardStyle()}><div style={iconWrap('#10b981')}><Wallet size={22} /></div><div><p style={statLabel}>NET WORTH</p><h4 style={statValue}>₹{fmt(totalAccountValue)}</h4></div></div>
+        <div style={statCardStyle()}><div style={iconWrap('#3b82f6')}><PieChart size={22} /></div><div><p style={statLabel}>EQUITY VALUE</p><h4 style={statValue}>₹{fmt(stats.total_value)}</h4></div></div>
+        <div style={statCardStyle()}><div style={iconWrap('#f59e0b')}><BarChart2 size={22} /></div><div><p style={statLabel}>AVAILABLE CASH</p><h4 style={statValue}>₹{fmt(stats.cash_balance)}</h4></div></div>
         <div style={statCardStyle(isProfitable ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)')}>
-          <div style={iconWrap(isProfitable ? '#10b981' : '#ef4444')}>
-            {isProfitable ? <TrendingUp size={22} /> : <TrendingDown size={22} />}
-          </div>
-          <div>
-            <p style={statLabel}>Unrealized P&amp;L</p>
-            <h4 style={{ ...statValue, color: isProfitable ? '#10b981' : '#ef4444' }}>
-              {isProfitable ? '+' : ''}₹{fmt(stats.total_pnl)}
-            </h4>
-          </div>
+          <div style={iconWrap(isProfitable ? '#10b981' : '#ef4444')}>{isProfitable ? <TrendingUp size={22} /> : <TrendingDown size={22} />}</div>
+          <div><p style={statLabel}>UNREALIZED P&amp;L</p><h4 style={{ ...statValue, color: isProfitable ? '#10b981' : '#ef4444' }}>{isProfitable ? '+' : ''}₹{fmt(stats.total_pnl)}</h4></div>
         </div>
-
       </div>
 
-      {/* ── Donut Chart + Holdings Table ── */}
-      <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-
-        {/* Donut Chart */}
-        <Card style={{ padding: '1.5rem', flex: '1 1 300px' }}>
+      {/* ── Allocation & Holdings ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.8fr', gap: '1.5rem', flexWrap: 'wrap' }}>
+        <Card style={{ padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1.1rem', marginBottom: '1.25rem', color: '#f8fafc' }}>Allocation</h3>
-          <ReactApexChart options={donutOptions} series={donutSeries} type="donut" height={300} />
+          <ReactApexChart options={donutOptions} series={donutSeries} type="donut" height={350} />
         </Card>
 
-        {/* Holdings Data Grid */}
-        <Card style={{ padding: '1.5rem', flex: '2 1 500px', overflow: 'auto' }}>
+        <Card style={{ padding: '1.5rem', overflow: 'hidden' }}>
           <h3 style={{ fontSize: '1.1rem', marginBottom: '1.25rem', color: '#f8fafc' }}>Holdings</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-            <thead>
-              <tr>
-                {['Symbol', 'Qty', 'Avg Price', 'Live Price', 'Market Value', 'P&L', 'Return'].map(col => (
-                  <th key={col} style={{
-                    padding: '0.75rem 0.75rem',
-                    textAlign: col === 'Symbol' ? 'left' : 'right',
-                    color: '#64748b',
-                    fontWeight: '600',
-                    fontSize: '0.75rem',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    borderBottom: '1px solid rgba(255,255,255,0.06)',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {positions.map((p, i) => {
-                const profit = p.pnl != null && p.pnl >= 0;
-                return (
-                  <tr key={p.id} style={{ transition: 'background 0.15s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    {/* Symbol */}
-                    <td style={{ padding: '1rem 0.75rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{
-                          width: 10, height: 10, borderRadius: '50%',
-                          background: DONUT_COLORS[i % DONUT_COLORS.length],
-                          flexShrink: 0
-                        }} />
-                        <span style={{ fontWeight: '700', color: '#f8fafc', letterSpacing: '0.02em' }}>{p.stock_symbol}</span>
-                      </div>
-                    </td>
-                    <td style={tdStyle}>{p.quantity}</td>
-                    <td style={tdStyle}>{formatCurrency(p.average_price, p.currency)}</td>
-                    <td style={tdStyle}>{formatCurrency(p.current_price, p.currency)}</td>
-                    <td style={tdStyle}>{formatCurrency(p.market_value, p.currency)}</td>
-                    <td style={{ ...tdStyle, color: p.pnl != null ? (profit ? '#10b981' : '#ef4444') : '#94a3b8', fontWeight: '600' }}>
-                      {p.pnl != null ? `${profit ? '+' : ''}${formatCurrency(p.pnl, p.currency)}` : '—'}
-                    </td>
-                    <td style={{ ...tdStyle, fontWeight: '600' }}>
-                      {p.pnl_pct != null ? (
-                        <span style={{
-                          padding: '0.2rem 0.6rem',
-                          borderRadius: '1rem',
-                          background: profit ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
-                          color: profit ? '#6ee7b7' : '#fca5a5',
-                          fontSize: '0.8rem'
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr>
+                  {['Symbol', 'Qty', 'Avg Price', 'Live Price', 'Market Value', 'P&L', 'Return'].map(col => (
+                    <th key={col} style={thStyle}>{col}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((p, i) => {
+                  const profit = p.pnl != null && p.pnl >= 0;
+                  return (
+                    <tr key={p.id} className="table-row">
+                      <td style={{ padding: '1rem 0.75rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+                          <span style={{ fontWeight: '700', color: '#f8fafc' }}>{p.stock_symbol}</span>
+                        </div>
+                      </td>
+                      <td style={tdStyle}>{p.quantity}</td>
+                      <td style={tdStyle}>{formatCurrency(p.average_price, p.currency)}</td>
+                      <td style={tdStyle}>{formatCurrency(p.current_price, p.currency)}</td>
+                      <td style={tdStyle}>{formatCurrency(p.market_value, p.currency)}</td>
+                      <td style={{ ...tdStyle, color: profit ? '#10b981' : '#ef4444', fontWeight: '600' }}>
+                        {p.pnl >= 0 ? '+' : ''}{formatCurrency(p.pnl, p.currency)}
+                      </td>
+                      <td style={{ ...tdStyle }}>
+                        <span style={{ 
+                          padding: '0.2rem 0.5rem', borderRadius: '4px', 
+                          background: profit ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', 
+                          color: profit ? '#10b981' : '#ef4444' 
                         }}>
                           {profit ? '+' : ''}{fmt(p.pnl_pct)}%
                         </span>
-                      ) : '—'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </Card>
       </div>
-
     </div>
   );
 }
@@ -344,4 +296,13 @@ const tdStyle = {
   color: '#cbd5e1',
   borderBottom: '1px solid rgba(255,255,255,0.04)',
   whiteSpace: 'nowrap'
+};
+
+const thStyle = {
+  padding: '0.75rem',
+  textAlign: 'right',
+  color: '#64748b',
+  fontSize: '0.7rem',
+  textTransform: 'uppercase',
+  borderBottom: '1px solid rgba(255,255,255,0.06)'
 };

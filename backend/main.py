@@ -585,134 +585,97 @@ def compare_stocks(symbols: str, period: str = "1mo", current_user: models.User 
         print(f"Error comparing: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.get("/api/portfolio")
-def get_portfolio(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    portfolio = db.query(models.Portfolio).filter(models.Portfolio.user_id == current_user.id).all()
-    return portfolio
-
-@app.get("/api/portfolio/summary")
-def get_portfolio_summary(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """
-    Returns portfolio holdings enriched with live market prices and P&L calculations.
-    Also returns aggregate summary stats: total invested, total current value, unrealized P&L.
-    """
-    holdings = db.query(models.Portfolio).filter(models.Portfolio.user_id == current_user.id).all()
-    
-    if not holdings:
-        return {
-            "positions": [],
-            "summary": {
-                "total_invested": 0.0,
-                "total_value": 0.0,
-                "total_pnl": 0.0,
-                "total_pnl_pct": 0.0,
-                "cash_balance": float(current_user.balance)
-            },
-            "rates": get_exchange_rates()
-        }
-    
-    # Batch-fetch all symbols at once for efficiency
-    symbols = [h.stock_symbol for h in holdings]
-    
-    # yf.download returns a DataFrame; for single symbols it's different
+def get_live_prices(symbols: list):
+    """Encapsulates the complexity of fetching live data from yfinance"""
+    if not symbols:
+        return {}
     try:
         if len(symbols) == 1:
             ticker = yf.Ticker(symbols[0])
             hist = ticker.history(period="2d")
-            live_prices = {symbols[0]: float(hist["Close"].iloc[-1]) if not hist.empty else None}
-        else:
-            # Download closing prices for all symbols in one request
-            raw = yf.download(symbols, period="2d", auto_adjust=True, progress=False)
-            close = raw["Close"] if "Close" in raw else raw
-            live_prices = {}
-            for sym in symbols:
-                try:
-                    col = close[sym] if sym in close.columns else close
-                    live_prices[sym] = float(col.dropna().iloc[-1])
-                except Exception:
-                    live_prices[sym] = None
+            return {symbols[0]: float(hist["Close"].iloc[-1]) if not hist.empty else None}
+        
+        raw = yf.download(symbols, period="2d", auto_adjust=True, progress=False)
+        close = raw["Close"] if "Close" in raw else raw
+        return {sym: float(close[sym].dropna().iloc[-1]) if sym in close.columns else None for sym in symbols}
     except Exception as e:
-        print(f"Error fetching live prices: {e}")
-        live_prices = {sym: None for sym in symbols}
+        print(f"Market Data Error: {e}")
+        return {sym: None for sym in symbols}
+
+        
+# @app.get("/api/portfolio")
+# def get_portfolio(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+#     portfolio = db.query(models.Portfolio).filter(models.Portfolio.user_id == current_user.id).all()
+#     return portfolio
+
+@app.get("/api/portfolio")
+def get_portfolio_data(
+    summary: bool = False, 
+    current_user: models.User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    """
+    Unified Portfolio Route. 
+    If ?summary=true, it fetches live prices and calculates P&L.
+    Otherwise, it returns raw holdings.
+    """
+    holdings = db.query(models.Portfolio).filter(models.Portfolio.user_id == current_user.id).all()
+    
+    # Standard response if empty
+    if not holdings:
+        return {"positions": [], "summary": {"cash_balance": float(current_user.balance)}}
+
+    # If the UI just wants the raw list (Original simple route logic)
+    if not summary:
+        return holdings
+
+    # --- ENRICHED SUMMARY LOGIC ---
+    symbols = [h.stock_symbol for h in holdings]
+    live_prices = get_live_prices(symbols)
+    rates = get_exchange_rates()
     
     positions = []
-    total_invested = 0.0
-    total_value = 0.0
+    total_invested_inr = 0.0
+    total_value_inr = 0.0
     
-    rates = get_exchange_rates()
     for h in holdings:
         qty = float(h.quantity)
         avg_price = float(h.average_price)
         current_price = live_prices.get(h.stock_symbol)
         
         currency = get_currency_for_symbol(h.stock_symbol)
-        conversion_rate = rates.get(currency, 1.0)
+        rate = rates.get(currency, 1.0)
         
+        market_val = qty * current_price if current_price else 0.0
         invested = qty * avg_price
-        market_value = qty * current_price if current_price is not None else None
-        pnl = (market_value - invested) if market_value is not None else None
-        pnl_pct = ((pnl / invested) * 100) if (pnl is not None and invested > 0) else None
+        pnl = (market_val - invested) if market_val else 0.0
+        pnl_pct = ((pnl / invested) * 100) if (invested > 0 and current_price) else 0.0
         
-        invested_inr = invested * conversion_rate
-        market_value_inr = market_value * conversion_rate if market_value is not None else None
-        
-        total_invested += invested_inr
-        if market_value_inr is not None:
-            total_value += market_value_inr
-        
+        # Aggregates in base currency (INR)
+        total_invested_inr += (invested * rate)
+        total_value_inr += (market_val * rate)
+            
         positions.append({
             "id": h.id,
             "stock_symbol": h.stock_symbol,
-            "currency": currency,
             "quantity": qty,
             "average_price": round(avg_price, 2),
-            "current_price": round(current_price, 2) if current_price is not None else None,
-            "market_value": round(market_value, 2) if market_value is not None else None,
-            "invested": round(invested, 2),
-            "pnl": round(pnl, 2) if pnl is not None else None,
-            "pnl_pct": round(pnl_pct, 2) if pnl_pct is not None else None
+            "current_price": round(current_price, 2) if current_price else None,
+            "market_value": round(market_val, 2),
+            "pnl": round(pnl, 2) if pnl else None,
+            "pnl_pct": round((pnl/invested)*100, 2) if pnl and invested > 0 else 0,
+            "currency": currency
         })
-    
-    total_pnl = total_value - total_invested
-    total_pnl_pct = ((total_pnl / total_invested) * 100) if total_invested > 0 else 0.0
-    
+
     return {
         "positions": positions,
         "summary": {
-            "total_invested": round(total_invested, 2),
-            "total_value": round(total_value, 2),
-            "total_pnl": round(total_pnl, 2),
-            "total_pnl_pct": round(total_pnl_pct, 2),
-            "cash_balance": round(float(current_user.balance), 2)
+            "total_value": round(total_value_inr, 2),
+            "total_pnl": round(total_value_inr - total_invested_inr, 2),
+            "cash_balance": float(current_user.balance)
         },
         "rates": rates
     }
-
-@app.post("/api/portfolio")
-def add_portfolio_item(item: schemas.PortfolioCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    existing = db.query(models.Portfolio).filter(
-        models.Portfolio.user_id == current_user.id, 
-        models.Portfolio.stock_symbol == item.stock_symbol
-    ).first()
-    
-    if existing:
-        # Update avg price and quantity
-        total_value = float(existing.quantity) * float(existing.average_price) + float(item.quantity) * item.average_price
-        new_quantity = float(existing.quantity) + item.quantity
-        existing.average_price = total_value / new_quantity if new_quantity > 0 else 0
-        existing.quantity = new_quantity
-    else:
-        new_item = models.Portfolio(
-            user_id=current_user.id,
-            stock_symbol=item.stock_symbol,
-            quantity=item.quantity,
-            average_price=item.average_price
-        )
-        db.add(new_item)
-    
-    db.commit()
-    return {"message": "Portfolio updated"}
 
 
 @app.post("/execute")

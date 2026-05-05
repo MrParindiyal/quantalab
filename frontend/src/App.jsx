@@ -30,14 +30,6 @@ function App() {
               </ProtectedRoute>
             } 
           />
-          {/* <Route 
-        path="/trade" 
-        element={
-          <ProtectedRoute>
-            <Trade />
-          </ProtectedRoute>
-        } 
-      /> */}
     </Routes>
     </ToastProvider>
   );

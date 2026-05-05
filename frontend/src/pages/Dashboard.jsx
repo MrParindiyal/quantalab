@@ -14,6 +14,7 @@ const SimpleLineChart = lazy(() => import('../components/charts/SimpleLineChart'
 const Portfolio = lazy(() => import('../components/Portfolio').then(m => ({ default: m.Portfolio })));
 const Comparison = lazy(() => import('../components/Comparison').then(m => ({ default: m.Comparison })));
 const Transactions = lazy(() => import('../components/Transactions').then(m => ({ default: m.Transactions })));
+const Backtest = lazy(() => import('../components/Backtest').then(m => ({ default: m.Backtest })));
 
 const MARKETS = {
   INDIA: {
@@ -99,6 +100,8 @@ export function Dashboard() {
   const [stockData, setStockData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [predDays, setPredDays] = useState(30);
+  const [historyYears, setHistoryYears] = useState(2);
 
   const TIME_PERIODS = [
     { label: '1M', value: '1mo' },
@@ -223,16 +226,16 @@ export function Dashboard() {
 
       <div className="metrics-grid">
         <Card className="metric-card">
-          <h3 className="metric-title">{symbol} Price</h3>
-          <div className="metric-value">
-            {stockData ? formatCurrency(stockData.metrics.currentPrice) : '---'}
-          </div>
-          {stockData && (
-            <div className={`metric-change ${stockData.metrics.changePct >= 0 ? 'positive' : 'negative'}`}>
-              {stockData.metrics.changePct >= 0 ? <ArrowUpRight size={16} /> : <TrendingDown size={16} />}
-              {Math.abs(stockData.metrics.changePct)}%
-            </div>
-          )}
+              <h3 className="metric-title">{symbol} Price</h3>
+              <div className="metric-value">
+                {stockData ? formatCurrency(stockData.metrics.currentPrice) : '---'}
+              </div>
+              {stockData && (
+                <div className={`metric-change ${stockData.metrics.changePct >= 0 ? 'positive' : 'negative'}`}>
+                  {stockData.metrics.changePct >= 0 ? <ArrowUpRight size={16} /> : <TrendingDown size={16} />}
+                  {Math.abs(stockData.metrics.changePct)}%
+                </div>
+              )}
         </Card>
         <Card className="metric-card">
           <h3 className="metric-title">Volume</h3>
@@ -380,11 +383,133 @@ export function Dashboard() {
         )}
         {activeTab === 'predictions' && (
           <div>
-            <h2 style={{ marginBottom: '2rem', fontSize: '2rem' }}>AI Forecast</h2>
-            <Suspense fallback={<div className="loading-overlay"><Loader2 className="spin" size={32} /></div>}>
-              <PredictionChart symbol={symbol} historicalData={stockData?.timeseries} />
+            {/* Predictions Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: '2rem',
+              flexWrap: 'wrap',
+              gap: '1rem'
+            }}>
+              <div>
+                <h2 style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '0.35rem' }}>AI Predictions</h2>
+                <p style={{ color: '#94a3b8', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  Powered by Random Forest Regressor · Trained on
+                  <select
+                    value={historyYears}
+                    onChange={(e) => setHistoryYears(Number(e.target.value))}
+                    style={{
+                      background: 'rgba(30, 41, 59, 0.8)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#f8fafc',
+                      padding: '0.1rem 0.4rem',
+                      borderRadius: '0.25rem',
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      outline: 'none'
+                    }}
+                  >
+                    {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(y => (
+                      <option key={y} value={y} style={{ background: '#1e293b' }}>{y}</option>
+                    ))}
+                  </select>
+                  years of historical data
+                </p>
+              </div>
+
+              {/* Market & Stock selector for predictions */}
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <select
+                  value={market}
+                  onChange={(e) => {
+                    const newMarket = e.target.value;
+                    setMarket(newMarket);
+                    const firstTicker = Object.keys(MARKETS[newMarket].tickers)[0];
+                    setSymbol(firstTicker);
+                    fetchStockData(firstTicker, period);
+                  }}
+                  style={{
+                    background: 'rgba(30, 41, 59, 0.8)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#f8fafc',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '0.5rem',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="INDIA" style={{ background: '#1e293b' }}>India Market</option>
+                  <option value="US" style={{ background: '#1e293b' }}>US Market</option>
+                  <option value="EU" style={{ background: '#1e293b' }}>EU Market</option>
+                </select>
+
+                <select
+                  value={Object.keys(MARKETS[market].tickers).includes(symbol) ? symbol : ''}
+                  onChange={(e) => { if (e.target.value) { setSymbol(e.target.value); fetchStockData(e.target.value, period); } }}
+                  style={{
+                    background: 'rgba(30, 41, 59, 0.8)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#f8fafc',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '0.5rem',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {Object.entries(MARKETS[market].tickers).map(([ticker, name]) => (
+                    <option key={ticker} value={ticker} style={{ background: '#1e293b' }}>{name} ({ticker})</option>
+                  ))}
+                </select>
+
+                {/* Forecast duration toggle */}
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {[7, 30, 90].map(d => (
+                    <button
+                      key={d}
+                      onClick={() => setPredDays(d)}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        borderRadius: '0.5rem',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        background: predDays === d ? 'rgba(59, 130, 246, 0.2)' : 'rgba(30, 41, 59, 0.5)',
+                        color: predDays === d ? '#60a5fa' : '#94a3b8',
+                        fontWeight: predDays === d ? '600' : '400',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {d}D
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <Suspense fallback={<div className="loading-overlay" style={{ height: 400 }}><Loader2 className="spin" size={32} /></div>}>
+              <PredictionChart symbol={symbol} historicalData={stockData?.timeseries} days={predDays} historyYears={historyYears} />
             </Suspense>
+
+            {/* Disclaimer */}
+            <div style={{
+              marginTop: '1.5rem',
+              padding: '1rem 1.25rem',
+              background: 'rgba(251, 191, 36, 0.05)',
+              border: '1px solid rgba(251, 191, 36, 0.15)',
+              borderRadius: '0.75rem',
+              color: '#fbbf24',
+              fontSize: '0.8rem',
+              lineHeight: 1.6
+            }}>
+              ⚠️ <strong>Disclaimer:</strong> These predictions are generated by a machine learning model for educational and simulation purposes only. They do not constitute financial advice and should not be used as the sole basis for investment decisions.
+            </div>
           </div>
+        )}
+        {activeTab === 'backtest' && (
+          <Suspense fallback={<div className="loading-overlay" style={{ height: 400 }}><Loader2 className="spin" size={32} /></div>}>
+            <Backtest />
+          </Suspense>
         )}
       </main>
     </div>

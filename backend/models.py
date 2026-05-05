@@ -18,7 +18,7 @@ class User(Base):
     name = Column(String)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
-    balance = Column(Numeric(10, 3), default=10_000)
+    balance = Column(Numeric(10, 3), default=100_000)
     created_at = Column(DateTime, server_default=func.current_timestamp())
 
     results = relationship("StrategyResult", back_populates="owner")

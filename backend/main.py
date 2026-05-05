@@ -5,18 +5,15 @@ from decimal import Decimal
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
-import jwt
-import models, numpy, os, schemas
+import jwt, models, os, schemas, ta, time, uvicorn
+import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sqlalchemy import func
 from sqlalchemy.orm import Session 
-import ta
 from utils import hash_password, check_password
-import uvicorn
 import yfinance as yf
 import pandas as pd
-import ta, time
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 
@@ -152,7 +149,7 @@ def get_stock_data(symbol: str, period: str = "1mo", current_user: models.User =
         if history.empty:
             raise HTTPException(status_code=404, detail=f"No data found for symbol {symbol}")
             
-        history = history.replace([numpy.inf, -numpy.inf], numpy.nan).ffill()
+        history = history.replace([np.inf, -np.inf], np.nan).ffill()
         
         # Calculate Technical Indicators
         close = history["Close"]
@@ -178,7 +175,7 @@ def get_stock_data(symbol: str, period: str = "1mo", current_user: models.User =
         
         # Risk Metrics Calculations (Daily Returns)
         daily_returns = close.pct_change().dropna()
-        volatility = daily_returns.std() * numpy.sqrt(252) * 100 # Annualized volatility
+        volatility = daily_returns.std() * np.sqrt(252) * 100 # Annualized volatility
         
         # Max Drawdown
         roll_max = close.cummax()
@@ -187,14 +184,14 @@ def get_stock_data(symbol: str, period: str = "1mo", current_user: models.User =
         
         # Sharpe Ratio (assuming risk free rate = 0.02)
         risk_free_rate = 0.02
-        sharpe_ratio = (daily_returns.mean() * 252 - risk_free_rate) / (daily_returns.std() * numpy.sqrt(252))
+        sharpe_ratio = (daily_returns.mean() * 252 - risk_free_rate) / (daily_returns.std() * np.sqrt(252))
 
         # Slice data to requested period
         days_to_keep = get_period_days(period)
         sliced_history = history.tail(days_to_keep).copy()
         
         # Replace NaN with None for JSON serialization
-        sliced_history = sliced_history.replace({numpy.nan: None})
+        sliced_history = sliced_history.replace({np.nan: None})
         
         latest_data = sliced_history.iloc[-1]
         prev_data = sliced_history.iloc[-2] if len(sliced_history) > 1 else latest_data
@@ -255,7 +252,7 @@ def predict_stock(symbol: str, days: int = 30, years: int = 2, current_user: mod
         
         # 1. Feature Engineering
         # Use DayIndex to capture long-term trend
-        history['DayIndex'] = numpy.arange(len(history))
+        history['DayIndex'] = np.arange(len(history))
         
         # Add Technical Indicators as features
         history['RSI'] = ta.momentum.rsi(history['Close'], window=14)
@@ -284,7 +281,7 @@ def predict_stock(symbol: str, days: int = 30, years: int = 2, current_user: mod
         
         # 2. Generate Predictions
         last_index = int(history['DayIndex'].iloc[-1])
-        future_indices = numpy.arange(last_index + 1, last_index + 1 + days).reshape(-1, 1)
+        future_indices = np.arange(last_index + 1, last_index + 1 + days).reshape(-1, 1)
         predictions = model.predict(future_indices)
         
         last_date = history['Date'].iloc[-1]
@@ -298,7 +295,7 @@ def predict_stock(symbol: str, days: int = 30, years: int = 2, current_user: mod
             
             # Simple confidence calculation based on time-drift and volatility
             # Uncertainty grows as we go further into the future
-            uncertainty = current_price * recent_volatility * numpy.sqrt(i + 1)
+            uncertainty = current_price * recent_volatility * np.sqrt(i + 1)
             
             forecast.append({
                 "date": pred_date.strftime("%Y-%m-%d"),

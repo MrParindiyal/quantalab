@@ -52,7 +52,14 @@ export function Portfolio() {
 
   useEffect(() => { fetchSummary(); }, []);
 
-  
+  const handleSellClick = (stock) => {
+    // Map portfolio data to the format TradeModal expects
+    setSelectedStock({
+      symbol: stock.stock_symbol,
+      metrics: { currentPrice: stock.current_price }
+    });
+    setIsModalOpen(true);
+  };
 
   if (loading) {
     return (
@@ -197,10 +204,10 @@ export function Portfolio() {
       </div>
 
       {/* ── Allocation & Holdings ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.8fr', gap: '1.5rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 2.2fr', gap: '1.5rem', flexWrap: 'wrap' }}>
         <Card style={{ padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1.1rem', marginBottom: '1.25rem', color: '#f8fafc' }}>Allocation</h3>
-          <ReactApexChart options={donutOptions} series={donutSeries} type="donut" height={350} />
+          <ReactApexChart options={donutOptions} series={donutSeries} type="donut" height={320} />
         </Card>
 
         <Card style={{ padding: '1.5rem', overflow: 'hidden' }}>
@@ -209,9 +216,14 @@ export function Portfolio() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
                 <tr>
-                  {['Symbol', 'Qty', 'Avg Price', 'Live Price', 'Market Value', 'P&L', 'Return'].map(col => (
-                    <th key={col} style={thStyle}>{col}</th>
-                  ))}
+                  <th style={{ ...thStyle, textAlign: 'left' }}>Action</th>
+                  <th style={{ ...thStyle, textAlign: 'left' }}>Symbol</th>
+                  <th style={thStyle}>Qty</th>
+                  <th style={thStyle}>Avg Price</th>
+                  <th style={thStyle}>Live Price</th>
+                  <th style={thStyle}>Market Value</th>
+                  <th style={thStyle}>P&L</th>
+                  <th style={thStyle}>Return</th>
                 </tr>
               </thead>
               <tbody>
@@ -219,6 +231,24 @@ export function Portfolio() {
                   const profit = p.pnl != null && p.pnl >= 0;
                   return (
                     <tr key={p.id} className="table-row">
+                      {/* Leftmost SELL Column */}
+                      <td style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <Button 
+                          variant="secondary" 
+                          onClick={() => handleSellClick(p)}
+                          style={{ 
+                            backgroundColor: '#ef4444', 
+                            color: 'white', 
+                            border: 'none', 
+                            padding: '0.4rem 0.8rem',
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold',
+                            borderRadius: '0.4rem'
+                          }}
+                        >
+                          SELL
+                        </Button>
+                      </td>
                       <td style={{ padding: '1rem 0.75rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                           <div style={{ width: 8, height: 8, borderRadius: '50%', background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
@@ -249,6 +279,20 @@ export function Portfolio() {
           </div>
         </Card>
       </div>
+
+      {/* Trade Modal Integration */}
+      {selectedStock && (
+        <TradeModal 
+          isOpen={isModalOpen} 
+          onClose={() => {
+            setIsModalOpen(false);
+            fetchSummary(true); // Refresh data after a potential trade
+          }} 
+          symbol={selectedStock.symbol} 
+          stockData={selectedStock} 
+          type="sell" 
+        />
+      )}
     </div>
   );
 }
